@@ -17,11 +17,11 @@ def enabled() -> bool:
     return bool(TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID)
 
 
-def call(method: str, timeout: int = 70, **params):
+def call(method: str, *, http_timeout: int = 70, **params):  # params go to Telegram (incl. its own "timeout")
     req = urllib.request.Request(
         f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/{method}",
         data=json.dumps(params).encode(), headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    with urllib.request.urlopen(req, timeout=http_timeout) as r:
         body = json.load(r)
     if not body.get("ok"):
         raise RuntimeError(f"Telegram {method} failed: {body}")
