@@ -1,0 +1,4 @@
+anthropic>=2.8,<3  # only for HUNT_AI=claude
+feedparser>=6.0,<7
+pyyaml>=6,<7
+pyjwt[crypto]>=2.10,<3  # checks the ChatGPT sign-in token

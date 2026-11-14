@@ -1,0 +1,31 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Dependencies / builds
+node_modules/
+dist/
+build/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Logs
+*.log
+
+# Hunt runtime data
+data/hunt.db
+data/chatgpt.json
+data/host_id
+data/*.lock
+data/.tmp-*
+deploy/target.env
+private/
+deploy/private-patterns.txt

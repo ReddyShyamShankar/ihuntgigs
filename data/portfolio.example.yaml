@@ -1,0 +1,23 @@
+# Portfolio library — the ONLY proof Hunt may cite in pitches. Copy to portfolio.yaml and fill in.
+owner:
+  name: Alex
+  base: Remote (GMT+0)
+  headline: Trader-credible writer and designer for crypto and fintech businesses
+  stats: 5 years freelancing, 120 projects
+  clients: Example Exchange, Example Broker
+  links:
+    portfolio: https://example.com/portfolio
+  services: [writing, analysis, design]
+  markets: [crypto, forex]
+
+projects:
+  - id: p01
+    title: Exchange blog content program
+    markets: [crypto]
+    services: [writing]
+    proof: '40 SEO articles for a mid-size exchange; organic traffic doubled in 6 months.'
+  - id: p02
+    title: Broker website redesign
+    markets: [forex]
+    services: [design]
+    proof: 'Redesigned onboarding pages for a retail FX broker; signup completion up 18%.'

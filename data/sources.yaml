@@ -1,0 +1,34 @@
+# Where Hunt looks for leads. Edit freely (phone-friendly): add/remove lines, push, done.
+# kind: funding = company just raised money / launched;  job = hiring a role you can do on contract;
+#       ask = someone publicly asking for a freelancer.
+
+# Google News searches. "when:3d" = last 3 days. region: US or IN (India).
+news:
+  # --- Crypto / Web3 ---
+  - {q: 'crypto startup raises seed OR "series A" when:3d', region: US}
+  - {q: 'web3 OR blockchain project raises funding when:3d', region: US}
+  - {q: 'crypto exchange launches OR "token launch" OR presale when:3d', region: US}
+  # --- Forex / prop firms / brokers ---
+  - {q: '"forex broker" launches OR licensed OR acquires when:7d', region: US}
+  - {q: '"prop firm" OR "proprietary trading firm" launches OR raises when:7d', region: US}
+  # --- US stocks / options / fintech ---
+  - {q: 'fintech raises seed OR "series A" trading OR investing when:3d', region: US}
+  - {q: '"options trading" platform OR app launches OR raises when:7d', region: US}
+  - {q: 'brokerage OR "investing app" OR wealthtech raises when:3d', region: US}
+  # --- India: stocks / options / fintech ---
+  - {q: 'fintech startup raises funding when:3d', region: IN}
+  - {q: 'stockbroking OR wealthtech OR "trading app" startup raises when:7d', region: IN}
+  - {q: 'SEBI approval broker OR "research analyst" OR "mutual fund" launch when:7d', region: IN}
+
+rss:
+  - {name: cryptojobslist, url: 'https://cryptojobslist.com/rss', kind: job}
+  - {name: cryptojobs, url: 'https://www.cryptojobs.com/jobs/feed', kind: job}
+  - {name: weworkremotely, url: 'https://weworkremotely.com/remote-jobs.rss', kind: job}
+  - {name: reddit_forhire, url: 'https://www.reddit.com/r/forhire/new/.rss', kind: ask, title_must_include: '[hiring]'}
+  - {name: inc42, url: 'https://inc42.com/buzz/feed/', kind: funding}
+  - {name: crypto_fundraising, url: 'https://crypto-fundraising.info/feed/', kind: funding}
+
+json:
+  - {name: remoteok, url: 'https://remoteok.com/api', kind: job}
+  - {name: remotive, url: 'https://remotive.com/api/remote-jobs?limit=200', kind: job}
+  - {name: himalayas, url: 'https://himalayas.app/jobs/api?limit=100', kind: job}
