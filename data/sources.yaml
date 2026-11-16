@@ -27,8 +27,71 @@ rss:
   - {name: reddit_forhire, url: 'https://www.reddit.com/r/forhire/new/.rss', kind: ask, title_must_include: '[hiring]'}
   - {name: inc42, url: 'https://inc42.com/buzz/feed/', kind: funding}
   - {name: crypto_fundraising, url: 'https://crypto-fundraising.info/feed/', kind: funding}
+  # Added 2026-11-15 (more gig / job places)
+  - {name: cryptocurrencyjobs, url: 'https://cryptocurrencyjobs.co/index.xml', kind: job}
+  - {name: dribbble_jobs, url: 'https://dribbble.com/jobs.rss', kind: job}
+  - {name: reddit_hireawriter, url: 'https://www.reddit.com/r/HireaWriter/new/.rss', kind: ask, title_must_include: 'hiring'}
+  - {name: reddit_designjobs, url: 'https://www.reddit.com/r/DesignJobs/new/.rss', kind: ask, title_must_include: 'hiring'}
 
 json:
   - {name: remoteok, url: 'https://remoteok.com/api', kind: job}
   - {name: remotive, url: 'https://remotive.com/api/remote-jobs?limit=200', kind: job}
   - {name: himalayas, url: 'https://himalayas.app/jobs/api?limit=100', kind: job}
+  # Gig marketplaces (bids stay manual — Hunt only finds and drafts)
+  # Freelancer.com by skill: Algorithmic Trading, Cryptocurrency, Financial Markets, Forex, MetaTrader, Pine Script, Trading, Blockchain
+  - {name: freelancer, format: freelancer, kind: ask, markets: [forex, crypto, us_stocks], url: 'https://www.freelancer.com/api/projects/0.1/projects/active/?jobs%5B%5D=3520&jobs%5B%5D=2658&jobs%5B%5D=227&jobs%5B%5D=3522&jobs%5B%5D=148&jobs%5B%5D=1384&jobs%5B%5D=1668&jobs%5B%5D=989&limit=50&compact=true&sort_field=time_updated&full_description=true'}
+  - {name: braintrust, format: braintrust, kind: job, url: 'https://app.usebraintrust.com/api/jobs/?page_size=50'}
+  - {name: jobicy_copywriting, format: jobicy, kind: job, url: 'https://jobicy.com/api/v2/remote-jobs?count=50&industry=copywriting'}
+  - {name: jobicy_finance, format: jobicy, kind: job, url: 'https://jobicy.com/api/v2/remote-jobs?count=50&industry=accounting-finance'}
+  - {name: jobicy_design, format: jobicy, kind: job, url: 'https://jobicy.com/api/v2/remote-jobs?count=50&industry=design-multimedia'}
+  - {name: workingnomads, format: workingnomads, kind: job, url: 'https://www.workingnomads.com/api/exposed_jobs/'}
+  # Searches on general boards for forex / stocks / trading roles (not just crypto)
+  - {name: himalayas_forex, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=forex', kind: job}
+  - {name: himalayas_trading, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=trading', kind: job}
+  - {name: himalayas_stocks, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=stock%20market', kind: job}
+  - {name: himalayas_fintech, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=fintech', kind: job}
+  # The owner's 12 core searches (same as the LinkedIn alerts), on Himalayas (Remotive ignores search words, so only its main feed is read)
+  - {name: himalayas_crypto_content_writer, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=crypto%20content%20writer', kind: job}
+  - {name: himalayas_financial_writer, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=financial%20writer', kind: job}
+  - {name: himalayas_crypto_community_manager, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=crypto%20community%20manager', kind: job}
+  - {name: himalayas_trading_mentor, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=trading%20mentor', kind: job}
+  - {name: himalayas_market_analyst, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=market%20analyst', kind: job}
+  - {name: himalayas_trading_signals, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=trading%20signals', kind: job}
+  - {name: himalayas_fintech_designer, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=fintech%20designer', kind: job}
+  - {name: himalayas_pine_script, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=pine%20script', kind: job}
+  - {name: himalayas_trading_bot, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=trading%20bot', kind: job}
+  - {name: himalayas_telegram_bot, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=telegram%20bot', kind: job}
+  - {name: himalayas_ai_video, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=ai%20video', kind: job}
+  - {name: himalayas_forex_business_development, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=forex%20business%20development', kind: job}
+
+# Trading / investing companies' own job pages (official public feeds; remote jobs only).
+# These are the same form types the auto-apply helper fills (Greenhouse, Lever, Ashby).
+careers:
+  # --- Forex / futures / prop firms ---
+  - {company: FTMO, ats: ashby, slug: ftmo, markets: [forex]}
+  - {company: NinjaTrader, ats: greenhouse, slug: ninjatrader, markets: [forex, options, us_stocks]}
+  # --- US stocks / options / investing apps ---
+  - {company: Robinhood, ats: greenhouse, slug: robinhood, markets: [us_stocks, options, crypto]}
+  - {company: tastytrade, ats: greenhouse, slug: tastytrade, markets: [options, us_stocks]}
+  - {company: SoFi, ats: greenhouse, slug: sofi, markets: [us_stocks]}
+  - {company: Betterment, ats: greenhouse, slug: betterment, markets: [us_stocks]}
+  - {company: Wealthfront, ats: lever, slug: wealthfront, markets: [us_stocks]}
+  - {company: Acorns, ats: ashby, slug: acorns, markets: [us_stocks]}
+  - {company: Alpaca, ats: greenhouse, slug: alpaca, markets: [us_stocks, crypto]}
+  - {company: Koyfin, ats: ashby, slug: koyfin, markets: [us_stocks]}
+  - {company: Kalshi, ats: ashby, slug: kalshi, markets: [us_stocks]}
+  # --- India ---
+  - {company: Groww, ats: greenhouse, slug: groww, markets: [india_stocks], remote_only: false}
+  # --- Crypto exchanges / platforms ---
+  - {company: Coinbase, ats: greenhouse, slug: coinbase, markets: [crypto]}
+  - {company: Binance, ats: greenhouse, slug: binance, markets: [crypto]}
+  - {company: OKX, ats: greenhouse, slug: okx, markets: [crypto]}
+  - {company: Gemini, ats: greenhouse, slug: gemini, markets: [crypto]}
+  - {company: Bitpanda, ats: greenhouse, slug: bitpanda, markets: [crypto]}
+  - {company: Crypto.com, ats: lever, slug: crypto, markets: [crypto]}
+  - {company: Polymarket, ats: ashby, slug: polymarket, markets: [crypto]}
+  - {company: Ledger, ats: ashby, slug: ledger, markets: [crypto]}
+  - {company: CoinGecko, ats: lever, slug: coingecko, markets: [crypto]}
+  - {company: CoinMarketCap, ats: lever, slug: coinmarketcap, markets: [crypto]}
+  - {company: Consensys, ats: greenhouse, slug: consensys, markets: [crypto]}
+  - {company: Blockworks, ats: ashby, slug: blockworks, markets: [crypto]}

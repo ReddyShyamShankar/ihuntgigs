@@ -57,9 +57,13 @@ ROLE_WORDS = ["writer", "writing", "content", "copywriter", "copy", "editor", "r
               "ui", "ux", "figma", "video", "motion", "youtube", "creator", "social media", "community",
               "seo", "ghostwriter", "whitepaper", "educator", "instructor", "tutor", "script", "marketing",
               "frontend", "front-end", "web developer", "full-stack", "fullstack", "trading bot", "bot",
-              "automation", "tradingview", "pine script", "mql", "freelance", "contract", "part-time"]
+              "automation", "tradingview", "pine script", "mql", "freelance", "contract", "part-time",
+              # added 2026-11-15 from LinkedIn + Notion portfolio
+              "moderator", "support", "customer success", "mentor", "coach", "trainer", "signal", "signals",
+              "trader", "trading", "product", "growth", "email", "newsletter", "ai", "telegram", "discord",
+              "no-code", "prompt", "financial model", "financial modeling", "equity research",
+              "partnerships", "affiliate", "sales", "business development", "account manager"]
 # …and not a role he doesn't do.
-JOB_EXCLUDE = ["rust", "smart contract", "solidity", "qa", "kyc", "aml", "risk", "compliance", "sales",
-               "account executive", "business development", "bd ", "hr", "recruiter", "talent", "devops",
+JOB_EXCLUDE = ["rust", "smart contract", "solidity", "qa", "kyc", "aml", "compliance", "hr", "recruiter", "talent", "devops",
                "security", "sre", "infrastructure", "backend", "back-end", "data engineer", "accountant",
                "legal", "counsel", "intern", "audit", "payroll", "treasury", "operations"]

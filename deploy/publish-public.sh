@@ -12,7 +12,8 @@ GH_ID="$(gh api user --jq .id)"; GH_LOGIN="$(gh api user --jq .login)"
 NOREPLY="${GH_ID}+${GH_LOGIN}@users.noreply.github.com"
 FILES=(
   hunt/__init__.py hunt/__main__.py hunt/brain.py hunt/chatgpt.py hunt/config.py
-  hunt/filters.py hunt/sources.py hunt/store.py hunt/telegram.py
+  hunt/filters.py hunt/gmail_alerts.py hunt/sources.py hunt/store.py hunt/telegram.py
+  applier/hunt_applier.py applier/profile.example.yaml
   deploy/deploy.sh deploy/hunt.service deploy/set-secret.sh deploy/push-login.sh deploy/publish-public.sh
   data/sources.yaml data/portfolio.example.yaml
   requirements.txt .env.example .gitignore
@@ -23,6 +24,11 @@ if [ "${DRY:-0}" = 1 ]; then mkdir -p "$OUT"; else gh repo clone "$PUBLIC_REPO" 
 find "$OUT" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
 for f in "${FILES[@]}"; do mkdir -p "$OUT/$(dirname "$f")"; git show "HEAD:$f" > "$OUT/$f"; done
 chmod +x "$OUT"/deploy/*.sh
+# Job-source list may name private clients (e.g. career pages): drop those lines from the public copy only.
+before=$(wc -l < "$OUT/data/sources.yaml")
+grep -viE -f "$PRIVATE_PATTERNS" "$OUT/data/sources.yaml" > "$OUT/data/sources.yaml.tmp" || true
+mv "$OUT/data/sources.yaml.tmp" "$OUT/data/sources.yaml"
+echo "sources.yaml: $((before - $(wc -l < "$OUT/data/sources.yaml"))) private line(s) left out of public copy"
 git show HEAD:opensource/README.md > "$OUT/README.md"
 git show HEAD:opensource/LICENSE > "$OUT/LICENSE"
 

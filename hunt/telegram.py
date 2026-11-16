@@ -1,6 +1,7 @@
 """Tiny Telegram Bot API client: sends lead cards with buttons and reads your taps/replies."""
 import html
 import json
+import re
 import urllib.parse
 import urllib.request
 
@@ -28,12 +29,54 @@ def call(method: str, *, http_timeout: int = 70, **params):  # params go to Tele
     return body["result"]
 
 
-def buttons(lead_id: str, status: str = "to_phone") -> dict:
+LABEL = {"approved": "🚀 QUEUED FOR AUTO-APPLY", "applying": "⏳ APPLYING…", "applied": "✅ APPLIED",
+         "needs_you": "👋 NEEDS YOU"}
+
+
+def buttons(lead_id: str, status: str = "to_phone", url: str = "", mail: str = "") -> dict:
     if status == "to_phone":
-        rows = [[("✅ Sent", "sent"), ("⏭ Skip", "skipped")]]
+        rows = [[("🚀 Auto-apply", "approve"), ("⏭ Skip", "skipped")], [("✅ I sent it myself", "sent")]]
+    elif status in ("approved", "needs_you"):
+        rows = [[(f"• {LABEL[status]} •", "noop")], [("✅ I sent it myself", "sent"), ("⏭ Skip", "skipped")]]
+    elif status == "applying":
+        rows = [[(f"• {LABEL[status]} •", "noop")]]
     else:
-        rows = [[(f"• {status.upper()} •", "noop")], [("💬 Replied", "replied"), ("🏆 Won", "won"), ("❌ Lost", "lost")]]
-    return {"inline_keyboard": [[{"text": t, "callback_data": f"{a}:{lead_id}"} for t, a in row] for row in rows]}
+        rows = [[(f"• {LABEL.get(status, status.upper())} •", "noop")],
+                [("💬 Replied", "replied"), ("🏆 Won", "won"), ("❌ Lost", "lost")]]
+    kb = [[{"text": t, "callback_data": f"{a}:{lead_id}"} for t, a in row] for row in rows]
+    links = []
+    url = _safe_url(url)[0]
+    if url:
+        links.append({"text": "Open ↗", "url": url})
+    if mail:
+        links.append({"text": "✉️ Email draft", "url": mail})
+    if links:
+        kb.append(links)
+    return {"inline_keyboard": kb}
+
+
+EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+SKIP_EMAIL = re.compile(r"(noreply|no-reply|donotreply|example\.(com|org)|\.(png|jpg|gif)$)", re.I)
+
+
+def lead_emails(lead: dict) -> list[str]:
+    """Email addresses that appear in the lead itself (never ones the AI made up)."""
+    text = f"{lead.get('summary', '')} {lead.get('title', '')}"
+    out = []
+    for e in EMAIL_RE.findall(text):
+        if not SKIP_EMAIL.search(e) and e.lower() not in out:
+            out.append(e.lower())
+    return out[:2]
+
+
+def gmail_compose(lead: dict, d: dict) -> str:
+    """Prefilled Gmail draft link; the owner reviews and taps Send in Gmail."""
+    to = lead_emails(lead)
+    if not to:
+        return ""
+    q = urllib.parse.urlencode({"view": "cm", "fs": "1", "to": ",".join(to),
+                                "su": _clip(d.get("email_subject"), 150), "body": _clip(d.get("email_body"), 1500)})
+    return "https://mail.google.com/mail/?" + q
 
 
 MAX_TEXT = 3900  # Telegram's limit is 4096 characters per message
@@ -76,7 +119,7 @@ def draft_text(d: dict) -> str:
 
 def send_lead(lead: dict, d: dict) -> tuple[int, int]:
     card = call("sendMessage", chat_id=TELEGRAM_CHAT_ID, text=card_text(lead, d), parse_mode="HTML",
-                disable_web_page_preview=True, reply_markup=buttons(lead["id"]))
+                disable_web_page_preview=True, reply_markup=buttons(lead["id"], url=lead["url"], mail=gmail_compose(lead, d)))
     draft = call("sendMessage", chat_id=TELEGRAM_CHAT_ID, text=draft_text(d),
                  reply_to_message_id=card["message_id"])
     return card["message_id"], draft["message_id"]

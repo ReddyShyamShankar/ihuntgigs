@@ -1,0 +1,17 @@
+# Copy to applier/profile.yaml (git-ignored) and fill in. Empty values are skipped.
+first_name: Alex
+last_name: Example
+email: alex@example.com
+phone: ""                 # with country code, e.g. +1 555 0100
+linkedin: https://www.linkedin.com/in/alex-example
+github: ""
+website: https://alex.example.com
+twitter: ""
+location: Remote
+current_company: Freelance
+current_title: Fintech writer & designer
+years_experience: 8
+rate: ""                  # left blank on purpose: forms asking pay come back as NEEDS YOU
+availability: Immediately
+heard_from: Job board
+resume: /full/path/to/cv.pdf

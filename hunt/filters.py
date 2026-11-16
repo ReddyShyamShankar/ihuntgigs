@@ -29,7 +29,7 @@ NOISE = re.compile(r"\b(price prediction|stock price|price, news|hack(ed|s)?|hei
 def keep(lead: dict) -> tuple[bool, list[str]]:
     """Return (worth sending to AI?, markets matched)."""
     text = f"{lead['title']} {lead['company']} {lead['summary']}"
-    markets = markets_in(text)
+    markets = markets_in(text) or lead.get("market_hint", [])
     if not markets:
         return False, []
     if lead["kind"] == "job":

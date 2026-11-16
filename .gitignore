@@ -29,3 +29,5 @@ data/.tmp-*
 deploy/target.env
 private/
 deploy/private-patterns.txt
+applier/profile.yaml
+applier/runs/

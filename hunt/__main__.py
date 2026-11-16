@@ -6,6 +6,7 @@
   python -m hunt digest    # send the weekly per-source summary
   python -m hunt login     # sign in with ChatGPT (on your own computer), then deploy/push-login.sh
   python -m hunt models    # list the ChatGPT models your plan offers
+  python -m hunt apply-queue [--peek] / apply-result ID STATUS [note] / apply-say TEXT   # used by applier/
 """
 import json
 import sys
@@ -13,7 +14,7 @@ import threading
 import time
 import traceback
 
-from . import brain, chatgpt, store, telegram
+from . import brain, chatgpt, gmail_alerts, store, telegram
 from .config import MAX_AI_PER_DAY, MAX_AI_PER_RUN, MIN_SCORE, RUN_EVERY_MINUTES, TELEGRAM_CHAT_ID
 from .filters import keep
 from .sources import collect
@@ -24,6 +25,10 @@ _lock = threading.Lock()
 
 def gather(con, dry=False) -> list[dict]:
     leads, errors = collect()
+    try:
+        leads += gmail_alerts.collect(None if dry else con)
+    except Exception as ex:  # noqa: BLE001 — Gmail trouble must not stop the other sources
+        errors.append(f"linkedin_alerts (gmail): {ex}")
     fresh, seen_keys = [], set()
     for lead in leads:
         if lead["title_key"] in seen_keys or not store.is_new(con, lead):
@@ -85,6 +90,10 @@ def run_cycle() -> str:
                 print("\n" + "=" * 70 + f"\n[{d['score']}] {lead['title']}\n{lead['url']}\n"
                       + telegram.draft_text(d))
             sent += 1
+        try:
+            gmail_alerts.mark_done(con)
+        except Exception as ex:  # noqa: BLE001
+            print("gmail mark-read error:", ex)
         summary = f"cycle done: {sent} to phone, {low} below {MIN_SCORE}, {max(0, len(todo) - budget)} still queued (AI used today: {store.ai_used_today(con)}/{MAX_AI_PER_DAY})"
         if paused:
             summary += f" — paused: {paused}"
@@ -112,7 +121,40 @@ def digest_text(days=7) -> str:
     return "\n".join(lines)
 
 
-BUTTON_ACTIONS = {"sent", "skipped", "replied", "won", "lost", "noop"}
+BUTTON_ACTIONS = {"approve", "sent", "skipped", "replied", "won", "lost", "noop"}
+STATUS_OF = {"approve": "approved"}
+APPLY_DONE = {"applied", "needs_you", "failed"}
+
+
+def rebutton(con, lead_id: str) -> None:
+    """Redraw a card's buttons for its current status (keeps the Open / Email links)."""
+    row = store.get(con, lead_id)
+    if not row or not row["tg_card_id"]:
+        return
+    lead, d = dict(row), json.loads(row["data"] or "{}")
+    telegram.call("editMessageReplyMarkup", chat_id=TELEGRAM_CHAT_ID, message_id=row["tg_card_id"],
+                  reply_markup=telegram.buttons(lead_id, row["status"], url=lead["url"],
+                                                mail=telegram.gmail_compose(lead, d)))
+
+
+def approve_all(con) -> int:
+    rows = store.with_status(con, "to_phone", max_age_days=3)
+    for r in rows:
+        store.update(con, r["id"], status="approved")
+        try:
+            rebutton(con, r["id"])
+        except Exception:  # noqa: BLE001 — an old card may be uneditable; the status still counts
+            pass
+    return len(rows)
+
+
+def apply_payload(row: dict) -> dict:
+    d = json.loads(row.get("data") or "{}")
+    return {"id": row["id"], "kind": row["kind"], "source": row["source"], "url": row["url"],
+            "title": row["title"], "company": d.get("company") or row["company"],
+            "emails": telegram.lead_emails(row),
+            "email_subject": d.get("email_subject", ""), "email_body": d.get("email_body", ""),
+            "dm": d.get("dm", "")}
 
 
 def handle_update(con, u) -> None:
@@ -124,10 +166,11 @@ def handle_update(con, u) -> None:
         if action not in BUTTON_ACTIONS or not lead_id:
             return
         if action != "noop":
-            store.update(con, lead_id, status=action)
-            telegram.call("editMessageReplyMarkup", chat_id=q["message"]["chat"]["id"],
-                          message_id=q["message"]["message_id"], reply_markup=telegram.buttons(lead_id, action))
-        telegram.call("answerCallbackQuery", callback_query_id=q["id"], text=f"Marked {action}")
+            status = STATUS_OF.get(action, action)
+            store.update(con, lead_id, status=status)
+            rebutton(con, lead_id)
+        note = "Queued — your Mac will apply" if action == "approve" else f"Marked {action}"
+        telegram.call("answerCallbackQuery", callback_query_id=q["id"], text=note)
         return
     msg = u.get("message") or {}
     text = (msg.get("text") or "").strip()
@@ -142,6 +185,10 @@ def handle_update(con, u) -> None:
         return  # ignore strangers (including /start once the owner is set)
     if text.startswith("/stats"):
         telegram.say(digest_text())
+    elif text.startswith("/applyall"):
+        n = approve_all(con)
+        telegram.say(f"🚀 {n} lead(s) queued for auto-apply. Your Mac applies them next time it checks in."
+                     if n else "Nothing waiting — no new cards from the last 3 days.")
     elif text.startswith("/run"):
         telegram.say("Running a cycle now…")
         telegram.say(run_cycle())
@@ -163,6 +210,10 @@ def handle_update(con, u) -> None:
             d.update(new)
             m = telegram.say(telegram.draft_text(d), reply_to_message_id=row["tg_card_id"])
             store.update(con, lead["id"], data=d, tg_draft_id=m["message_id"])
+            try:
+                rebutton(con, lead["id"])  # the ✉️ Email draft link must carry the rewritten pitch
+            except Exception:  # noqa: BLE001 — an old card may be uneditable
+                pass
 
 
 def bot() -> None:
@@ -215,6 +266,33 @@ def main() -> None:
     elif cmd == "models":
         for m in chatgpt.models():
             print(f"{m['slug']}  {m['name']}")
+    elif cmd == "apply-queue":  # used by the Mac helper (applier/) over SSH
+        con = store.db()
+        # Only one helper runs at a time, so anything still "applying" is left over from a run that
+        # stopped part-way: offer it again (the helper skips URLs it already submitted).
+        rows = store.with_status(con, ("approved", "applying"))
+        if "--peek" not in sys.argv:
+            for r in rows:
+                if r["status"] != "applying":
+                    store.update(con, r["id"], status="applying")
+                    rebutton(con, r["id"])
+        print(json.dumps([apply_payload(r) for r in rows]))
+    elif cmd == "apply-result":  # apply-result LEAD_ID applied|needs_you|failed [note...]
+        lead_id, status, note = sys.argv[2], sys.argv[3], " ".join(sys.argv[4:])[:300]
+        if status not in APPLY_DONE:
+            raise SystemExit(f"status must be one of {sorted(APPLY_DONE)}")
+        con = store.db()
+        row = store.get(con, lead_id)
+        if not row:
+            raise SystemExit("unknown lead")
+        d = json.loads(row["data"] or "{}")
+        d["apply_note"] = note
+        store.update(con, lead_id, status="needs_you" if status == "failed" else status, data=d)
+        rebutton(con, lead_id)
+        if status != "applied" and note and telegram.enabled():
+            telegram.say(f"👋 Needs you — {row['title'][:80]}\n{note}", reply_to_message_id=row["tg_card_id"])
+    elif cmd == "apply-say":  # the Mac helper's end-of-batch summary
+        telegram.say(" ".join(sys.argv[2:])[:3500])
     elif cmd == "digest":
         telegram.say(digest_text()) if telegram.enabled() else print(digest_text())
     else:

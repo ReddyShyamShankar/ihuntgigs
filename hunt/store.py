@@ -18,6 +18,7 @@ CREATE INDEX IF NOT EXISTS idx_status ON leads(status);
 CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
 """
 # status: filtered | queued | low | duplicate | to_phone | sent | skipped | replied | won | lost | error
+#         + auto-apply: approved (owner tapped 🚀) → applying (Mac helper took it) → applied | needs_you
 
 
 def db() -> sqlite3.Connection:
@@ -66,6 +67,15 @@ def queued(con, max_age_days=3):
     cutoff = time.time() - max_age_days * 86400
     return [dict(r) for r in con.execute(
         "SELECT * FROM leads WHERE status='queued' AND created_at>? ORDER BY created_at DESC", (cutoff,))]
+
+
+def with_status(con, statuses, max_age_days=None) -> list[dict]:
+    """Leads in any of `statuses`; max_age_days=None means no age limit."""
+    statuses = [statuses] if isinstance(statuses, str) else list(statuses)
+    cutoff = time.time() - max_age_days * 86400 if max_age_days else 0
+    marks = ",".join("?" * len(statuses))
+    return [dict(r) for r in con.execute(
+        f"SELECT * FROM leads WHERE status IN ({marks}) AND created_at>? ORDER BY score DESC", (*statuses, cutoff))]
 
 
 def meta_get(con, key, default=None):
