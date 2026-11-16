@@ -352,7 +352,7 @@ def run(live: bool, only_url: str = "") -> None:
     CHROME_DIR.mkdir(parents=True, exist_ok=True)
     counts = {"applied": 0, "needs_you": 0, "dry": 0}
     with sync_playwright() as pw:
-        ctx = pw.chromium.launch_persistent_context(str(CHROME_DIR), channel="chrome", headless=False,
+        ctx = pw.chromium.launch_persistent_context(str(CHROME_DIR), channel="chrome", headless=False, ignore_default_args=["--no-sandbox"],
                                                     viewport={"width": 1280, "height": 900})
         if not ctx.pages:
             ctx.new_page()  # keep one tab so the window stays open
@@ -385,14 +385,16 @@ def main() -> None:
     ap.add_argument("--setup", action="store_true", help="open the helper's Chrome so you can sign in to job boards once")
     a = ap.parse_args()
     if a.setup:
-        from playwright.sync_api import sync_playwright
+        # Plain Chrome on the helper's profile, no automation attached:
+        # Google refuses "Sign in with Google" in robot-controlled Chrome.
         CHROME_DIR.mkdir(parents=True, exist_ok=True)
-        with sync_playwright() as pw:
-            ctx = pw.chromium.launch_persistent_context(str(CHROME_DIR), channel="chrome", headless=False)
-            page = ctx.pages[0] if ctx.pages else ctx.new_page()
-            page.goto("https://remoteok.com/sign-in")
-            input("Sign in to the job boards you use in this window, then press Enter here to save and close… ")
-            ctx.close()
+        chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+        proc = subprocess.Popen([chrome, f"--user-data-dir={CHROME_DIR}", "--no-first-run",
+                                 "https://remoteok.com/login"],
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        input("Sign in to the job boards you use in this window, then press Enter here to save and close… ")
+        proc.terminate()
+        proc.wait(timeout=30)
         return
     while True:
         try:
