@@ -164,6 +164,47 @@ def assess(lead: dict) -> dict | None:
     return check(_ask(_lead_block(lead), LEAD_SCHEMA), lead)
 
 
+BID_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "bid_text": {"type": "string"},
+        "proof_ids": {"type": "array", "items": {"type": "string"}},
+        "days": {"type": "integer", "description": "realistic delivery time in days"},
+    },
+    "required": ["bid_text", "proof_ids", "days"],
+    "additionalProperties": False,
+}
+
+BID_RULES = f"""Write a bid for this freelance project on Freelancer.com. The bid amount is set separately.
+Hard rules (a checker rejects the bid if any is broken):
+- {60}-{180} words, plain text, short paragraphs of at most 3 sentences, sentences under 25 words.
+- First line: one specific observation about THEIR project (a risk, a detail, what it needs). Never open by
+  restating the job ("You need...", "I am interested in your project", "I can help you with").
+- Cite 1-2 proofs from the portfolio library by fact. Every number you write must appear exactly in the
+  portfolio or in the project text. No other numbers.
+- No links, no email addresses, no phone numbers, no messaging apps. Never name Upwork or any other platform.
+- No price, rate or currency amount. No free samples, trials or "unlimited revisions".
+- First person singular ("I"), never "we/our/us", never "my team/agency".
+- No long dashes (— or –). No filler words: passionate, seamless, robust, cutting-edge, high-quality, delve.
+- The line before the sign-off must be one concrete question or next step about their project, using
+  words from their post. Not "Let me know" or "Looking forward to hearing from you".
+- If the project text gives an instruction for the bid (a code word, a word limit, an ending), follow it.
+- Last line: just "{NAME}".
+"""
+
+
+def write_bid(lead: dict, feedback: list[str] | None = None, instruction: str = "", current: str = "") -> dict | None:
+    """Freelancer-style bid. `feedback` = rules the last attempt broke; `instruction` = owner's words."""
+    parts = [BID_RULES, _lead_block(lead)]
+    if current:
+        parts.append(f"Current bid:\n{current}")
+    if instruction:
+        parts.append(f"{NAME}'s instruction (the owner's words, trusted): {instruction}")
+    if feedback:
+        parts.append("The checker rejected the last attempt for: " + "; ".join(feedback) + ". Fix every one.")
+    return _ask("\n\n".join(parts), BID_SCHEMA)
+
+
 def rewrite(lead: dict, current: dict, instruction: str) -> dict | None:
     return check(_ask(
         f"Rewrite this pitch following {NAME}'s instruction (the owner's words, trusted). Same rules as before.\n"

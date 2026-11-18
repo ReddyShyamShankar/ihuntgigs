@@ -19,6 +19,9 @@ CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
 """
 # status: filtered | queued | low | duplicate | to_phone | sent | skipped | replied | won | lost | error
 #         + auto-apply: approved (owner tapped 🚀) → applying (Mac helper took it) → applied | needs_you
+#         + pick flow (sources with `flow: pick`, Upwork-bot style):
+#           pick_new → pick (card on phone, no AI yet) → to_write (owner tapped ✍️) → drafted | draft_failed
+#           → bid_approved (owner tapped ✅; bid text locked in data.locked_bid). later = parked by owner.
 
 
 def db() -> sqlite3.Connection:
@@ -39,9 +42,10 @@ def add(con, lead, markets, status) -> None:
     now = time.time()
     con.execute(
         "INSERT OR IGNORE INTO leads (id,title_key,source,kind,title,url,company,summary,published,"
-        "markets,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "markets,status,data,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (lead["id"], lead["title_key"], lead["source"], lead["kind"], lead["title"], lead["url"],
-         lead["company"], lead["summary"], lead["published"], ",".join(markets), status, now, now))
+         lead["company"], lead["summary"], lead["published"], ",".join(markets), status,
+         json.dumps({"extra": lead["extra"]}) if lead.get("extra") else None, now, now))
     con.commit()
 
 
@@ -120,5 +124,25 @@ def ai_used_today(con) -> int:
     return int(meta_get(con, "ai:" + time.strftime("%Y-%m-%d"), "0"))
 
 
-def ai_count_add(con) -> None:
+def bid_ai_used_today(con) -> int:
+    return int(meta_get(con, "aibid:" + time.strftime("%Y-%m-%d"), "0"))
+
+
+def ai_count_add(con, bid: bool = False) -> None:
+    """Every AI call counts toward the daily total. Calls the owner asked for (bids, pitch rewrites)
+    pass bid=True and are also counted on their own, so the automatic queue's share can be worked out."""
     meta_set(con, "ai:" + time.strftime("%Y-%m-%d"), ai_used_today(con) + 1)
+    if bid:
+        meta_set(con, "aibid:" + time.strftime("%Y-%m-%d"), bid_ai_used_today(con) + 1)
+
+
+def lead_ai_left(con, max_per_day: int, reserve: int) -> int:
+    """AI calls the automatic lead queue may still make today (the bid reserve is off-limits)."""
+    total, bids = ai_used_today(con), bid_ai_used_today(con)
+    return max(0, min(max_per_day - reserve - (total - bids), max_per_day - total))
+
+
+def bid_ai_left(con, max_per_day: int, reserve: int) -> int:
+    """AI calls the owner's requests (bids, pitch rewrites) may still make today. Never past the daily
+    cap; the reserve is guaranteed because the automatic queue stops at max_per_day - reserve."""
+    return max(0, max_per_day - ai_used_today(con))

@@ -30,11 +30,25 @@ def call(method: str, *, http_timeout: int = 70, **params):  # params go to Tele
 
 
 LABEL = {"approved": "🚀 QUEUED FOR AUTO-APPLY", "applying": "⏳ APPLYING…", "applied": "✅ APPLIED",
-         "needs_you": "👋 NEEDS YOU"}
+         "needs_you": "👋 NEEDS YOU", "to_write": "✍️ WRITING…", "later": "⏰ LATER (/later brings it back)",
+         "bid_approved": "🔒 APPROVED — bid text locked"}
+
+# Pick flow (Upwork-bot style): which buttons each status shows.
+PICK_ROWS = {
+    "pick": [[("✍️ Write bid", "write"), ("⏰ Later", "later"), ("⏭ Skip", "skipped")]],
+    "drafted": [[("✅ Approve", "bidok"), ("🔁 Redo", "redo"), ("⏭ Skip", "skipped")]],
+    "draft_failed": [[("🔁 Try again", "redo"), ("⏭ Skip", "skipped")]],
+    "to_write": [[(f"• {LABEL['to_write']} •", "noop")]],
+    "later": [[(f"• {LABEL['later']} •", "noop")], [("✍️ Write bid", "write"), ("⏭ Skip", "skipped")]],
+    "bid_approved": [[(f"• {LABEL['bid_approved']} •", "noop")],
+                     [("✅ I bid myself", "sent"), ("⏭ Skip", "skipped")]],
+}
 
 
 def buttons(lead_id: str, status: str = "to_phone", url: str = "", mail: str = "") -> dict:
-    if status == "to_phone":
+    if status in PICK_ROWS:
+        rows = PICK_ROWS[status]
+    elif status == "to_phone":
         rows = [[("🚀 Auto-apply", "approve"), ("⏭ Skip", "skipped")], [("✅ I sent it myself", "sent")]]
     elif status in ("approved", "needs_you"):
         rows = [[(f"• {LABEL[status]} •", "noop")], [("✅ I sent it myself", "sent"), ("⏭ Skip", "skipped")]]
@@ -123,6 +137,33 @@ def send_lead(lead: dict, d: dict) -> tuple[int, int]:
     draft = call("sendMessage", chat_id=TELEGRAM_CHAT_ID, text=draft_text(d),
                  reply_to_message_id=card["message_id"])
     return card["message_id"], draft["message_id"]
+
+
+def pick_card_text(lead: dict) -> str:
+    """Short card with NO AI text yet: the owner decides first whether a bid is worth writing."""
+    e = html.escape
+    x = (json.loads(lead.get("data") or "{}") if isinstance(lead.get("data"), str) else lead.get("data") or {}).get("extra") or {}
+    url, domain = _safe_url(lead["url"])
+    money = ""
+    if x.get("budget_min") is not None or x.get("budget_max") is not None:
+        money = f"💵 {x.get('budget_min', '?')}–{x.get('budget_max', '?')} {e(str(x.get('currency', '')))} · {e(str(x.get('type', '')))}"
+        if x.get("bid_count") is not None:
+            money += f" · {x['bid_count']} bids so far"
+        money += "\n"
+    summary = lead.get("summary", "")
+    if summary.startswith("Budget "):
+        summary = summary.split(". ", 1)[-1]
+    link = f"<a href=\"{e(url)}\">Open on {e(domain)} ↗</a>" if url else f"(no safe link · {e(domain)})"
+    return (f"🎯 <b>{e(lead['source'].upper())}</b> · pick or skip\n<b>{e(_clip(lead['title'], 200))}</b>\n{money}\n"
+            f"{e(_clip(summary, 700))}\n\n{link}")
+
+
+def bid_text(d: dict) -> str:
+    p = d.get("policy") or {}
+    head = f"✍️ Bid · checker {p.get('score', '?')}% · {d.get('days', '?')} days\n\n"
+    tail = ("\n\n— — —\nTap ✅ Approve to lock this exact text. Reply to this message to change it "
+            "(e.g. 'shorter'), or start your reply with TEXT: to use your own words.")
+    return _clip(head + d.get("bid", "") + tail, MAX_TEXT)
 
 
 def say(text: str, **extra) -> dict:

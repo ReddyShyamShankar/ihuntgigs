@@ -12,7 +12,7 @@ GH_ID="$(gh api user --jq .id)"; GH_LOGIN="$(gh api user --jq .login)"
 NOREPLY="${GH_ID}+${GH_LOGIN}@users.noreply.github.com"
 FILES=(
   hunt/__init__.py hunt/__main__.py hunt/brain.py hunt/chatgpt.py hunt/config.py
-  hunt/filters.py hunt/gmail_alerts.py hunt/sources.py hunt/store.py hunt/telegram.py
+  hunt/filters.py hunt/gmail_alerts.py hunt/sources.py hunt/store.py hunt/telegram.py hunt/pick.py hunt/policy.py
   applier/hunt_applier.py applier/profile.example.yaml
   deploy/deploy.sh deploy/hunt.service deploy/set-secret.sh deploy/push-login.sh deploy/publish-public.sh
   data/sources.yaml data/portfolio.example.yaml

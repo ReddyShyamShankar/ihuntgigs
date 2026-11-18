@@ -14,10 +14,10 @@ import threading
 import time
 import traceback
 
-from . import brain, chatgpt, gmail_alerts, store, telegram
-from .config import MAX_AI_PER_DAY, MAX_AI_PER_RUN, MIN_SCORE, RUN_EVERY_MINUTES, TELEGRAM_CHAT_ID
+from . import brain, chatgpt, gmail_alerts, pick, store, telegram
+from .config import BID_RESERVE, MAX_AI_PER_DAY, MAX_AI_PER_RUN, MIN_SCORE, RUN_EVERY_MINUTES, TELEGRAM_CHAT_ID
 from .filters import keep
-from .sources import collect
+from .sources import collect, pick_sources
 
 PRIORITY = {"ask": 0, "funding": 1, "job": 2}
 _lock = threading.Lock()
@@ -30,6 +30,7 @@ def gather(con, dry=False) -> list[dict]:
     except Exception as ex:  # noqa: BLE001 — Gmail trouble must not stop the other sources
         errors.append(f"linkedin_alerts (gmail): {ex}")
     fresh, seen_keys = [], set()
+    picky = pick_sources()
     for lead in leads:
         if lead["title_key"] in seen_keys or not store.is_new(con, lead):
             continue
@@ -37,7 +38,7 @@ def gather(con, dry=False) -> list[dict]:
         ok, markets = keep(lead)
         lead["markets"] = markets
         if not dry:
-            store.add(con, lead, markets, "queued" if ok else "filtered")
+            store.add(con, lead, markets, ("pick_new" if lead["source"] in picky else "queued") if ok else "filtered")
         if ok:
             fresh.append(lead)
     print(f"collected {len(leads)} items, {len(fresh)} new + relevant by keywords")
@@ -50,12 +51,15 @@ def run_cycle() -> str:
     with _lock:
         con = store.db()
         gather(con)
+        picked = pick.send_new_cards(con)
         todo = store.queued(con)
         todo.sort(key=lambda l: (PRIORITY.get(l["kind"], 9), -l["created_at"]))
         sent = low = 0
-        budget = max(0, min(MAX_AI_PER_RUN, MAX_AI_PER_DAY - store.ai_used_today(con)))
+        budget = min(MAX_AI_PER_RUN, store.lead_ai_left(con, MAX_AI_PER_DAY, BID_RESERVE))
         paused = ""
         for lead in todo[:budget]:
+            if not store.lead_ai_left(con, MAX_AI_PER_DAY, BID_RESERVE):
+                break  # the bid writer runs at the same time; its reserve is off-limits here
             try:
                 d = brain.assess(lead)
                 store.ai_count_add(con)
@@ -94,7 +98,7 @@ def run_cycle() -> str:
             gmail_alerts.mark_done(con)
         except Exception as ex:  # noqa: BLE001
             print("gmail mark-read error:", ex)
-        summary = f"cycle done: {sent} to phone, {low} below {MIN_SCORE}, {max(0, len(todo) - budget)} still queued (AI used today: {store.ai_used_today(con)}/{MAX_AI_PER_DAY})"
+        summary = f"cycle done: {picked} pick cards, {sent} to phone, {low} below {MIN_SCORE}, {max(0, len(todo) - budget)} still queued (AI used today: {store.ai_used_today(con)}/{MAX_AI_PER_DAY}, bids {store.bid_ai_used_today(con)}, reserved for bids {BID_RESERVE})"
         if paused:
             summary += f" — paused: {paused}"
         print(summary)
@@ -116,12 +120,13 @@ def digest_text(days=7) -> str:
     lines = [f"📊 Hunt — last {days} days (per source)"]
     for src, st in sorted(s.items()):
         shown = st.get("to_phone", 0) + sum(st.get(k, 0) for k in ("sent", "skipped", "replied", "won", "lost"))
+        shown += sum(st.get(k, 0) for k in pick.STATUSES - {"pick_new"})
         lines.append(f"{src}: shown {shown} · sent {st.get('sent', 0) + st.get('replied', 0) + st.get('won', 0) + st.get('lost', 0)}"
                      f" · replied {st.get('replied', 0) + st.get('won', 0) + st.get('lost', 0)} · won {st.get('won', 0)}")
     return "\n".join(lines)
 
 
-BUTTON_ACTIONS = {"approve", "sent", "skipped", "replied", "won", "lost", "noop"}
+BUTTON_ACTIONS = {"approve", "sent", "skipped", "replied", "won", "lost", "noop"} | set(pick.TAPS)
 STATUS_OF = {"approve": "approved"}
 APPLY_DONE = {"applied", "needs_you", "failed"}
 
@@ -165,6 +170,11 @@ def handle_update(con, u) -> None:
         action, _, lead_id = str(q.get("data", "")).partition(":")
         if action not in BUTTON_ACTIONS or not lead_id:
             return
+        row = store.get(con, lead_id)
+        if action != "noop" and pick.owns(row, action):
+            note = pick.tap(con, action, lead_id, q.get("message", {}).get("message_id"))
+            telegram.call("answerCallbackQuery", callback_query_id=q["id"], text=note)
+            return
         if action != "noop":
             status = STATUS_OF.get(action, action)
             store.update(con, lead_id, status=status)
@@ -189,6 +199,9 @@ def handle_update(con, u) -> None:
         n = approve_all(con)
         telegram.say(f"🚀 {n} lead(s) queued for auto-apply. Your Mac applies them next time it checks in."
                      if n else "Nothing waiting — no new cards from the last 3 days.")
+    elif text.startswith("/later"):
+        n = pick.resend_later(con)
+        telegram.say(f"⏰ {n} parked card(s) sent again below." if n else "Nothing parked.")
     elif text.startswith("/run"):
         telegram.say("Running a cycle now…")
         telegram.say(run_cycle())
@@ -196,12 +209,15 @@ def handle_update(con, u) -> None:
         row = store.by_message(con, msg["reply_to_message"]["message_id"])
         if not row:
             return
+        if pick.owns(row):
+            pick.reply(con, row, text)
+            return
         lead, d = dict(row), json.loads(row["data"] or "{}")
-        if store.ai_used_today(con) >= MAX_AI_PER_DAY:
+        if not store.bid_ai_left(con, MAX_AI_PER_DAY, BID_RESERVE):
             telegram.say(f"⏸ Daily AI limit ({MAX_AI_PER_DAY}) reached; try the rewrite tomorrow.")
             return
         try:
-            store.ai_count_add(con)
+            store.ai_count_add(con, bid=True)  # owner-requested: comes out of the reserve, not the queue's share
             new = brain.rewrite(lead, {k: d.get(k, "") for k in ("email_subject", "email_body", "dm")}, text)
         except (chatgpt.UsageLimit, chatgpt.LoginNeeded, chatgpt.TryLater) as ex:
             telegram.say(f"⏸ Can't rewrite right now: {ex}")
@@ -230,7 +246,17 @@ def bot() -> None:
                 traceback.print_exc()
             time.sleep(RUN_EVERY_MINUTES * 60)
 
+    def writer():  # writes bids the owner asked for (✍️ / 🔁 / reply) within seconds, not at the next hourly cycle
+        con3 = store.db()
+        while True:
+            try:
+                pick.process_writes(con3)
+            except Exception:  # noqa: BLE001
+                traceback.print_exc()
+            time.sleep(10)
+
     threading.Thread(target=scheduler, daemon=True).start()
+    threading.Thread(target=writer, daemon=True).start()
     con = store.db()
     offset = int(store.meta_get(con, "tg_offset", "0"))
     print("bot listening…")

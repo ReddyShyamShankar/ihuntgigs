@@ -88,9 +88,13 @@ def _json(name, url, kind, fmt=None, markets=None) -> list[dict]:
             budget = d.get("budget") or {}
             cur = (d.get("currency") or {}).get("code", "")
             pay = f"Budget {budget.get('minimum', '?')}-{budget.get('maximum', '?')} {cur} ({d.get('type', '')}). "
-            out.append(_lead(name, kind, d["title"], "https://www.freelancer.com/projects/" + d.get("seo_url", ""),
-                             pay + (d.get("description") or d.get("preview_description") or ""), "",
-                             d.get("time_submitted", "")))
+            lead = _lead(name, kind, d["title"], "https://www.freelancer.com/projects/" + d.get("seo_url", ""),
+                         pay + (d.get("description") or d.get("preview_description") or ""), "",
+                         d.get("time_submitted", ""))
+            lead["extra"] = {"project_id": d.get("id"), "budget_min": budget.get("minimum"),
+                             "budget_max": budget.get("maximum"), "currency": cur, "type": d.get("type", ""),
+                             "bid_count": (d.get("bid_stats") or {}).get("bid_count")}
+            out.append(lead)
     elif name_fmt == "braintrust":
         for d in data.get("results", []):
             budget = f"${d.get('budget_minimum_usd')}-{d.get('budget_maximum_usd')} {d.get('payment_type', '')}. "
@@ -148,6 +152,12 @@ def _careers(name, ats, slug, company, markets, remote_only=True) -> list[dict]:
         lead["market_hint"] = list(markets)
         out.append(lead)
     return out
+
+
+def pick_sources() -> set[str]:
+    """Sources marked `flow: pick` in sources.yaml: the owner picks before the AI writes (Upwork-bot flow)."""
+    cfg = yaml.safe_load((DATA / "sources.yaml").read_text())
+    return {s["name"] for group in ("rss", "json") for s in cfg.get(group, []) or [] if s.get("flow") == "pick"}
 
 
 def collect() -> tuple[list[dict], list[str]]:

@@ -28,6 +28,9 @@ CHATGPT_EFFORT = os.environ.get("HUNT_CHATGPT_EFFORT", "")  # optional reasoning
 MODEL = os.environ.get("HUNT_MODEL", "claude-opus-5-5")
 EFFORT = os.environ.get("HUNT_EFFORT", "medium")
 MAX_AI_PER_DAY = int(os.environ.get("HUNT_MAX_AI_PER_DAY", "60"))
+# Part of the daily AI limit kept for bids you ask for (✍️ / 🔁 / reply). The automatic lead queue
+# can never use it; bids may also use whatever the queue leaves unused. Total never goes over MAX_AI_PER_DAY.
+BID_RESERVE = int(os.environ.get("HUNT_BID_RESERVE", "40"))
 MIN_SCORE = int(os.environ.get("HUNT_MIN_SCORE", "60"))
 MAX_AI_PER_RUN = int(os.environ.get("HUNT_MAX_AI_PER_RUN", "25"))
 DB_PATH = Path(os.environ.get("HUNT_DB", str(DATA / "hunt.db")))
