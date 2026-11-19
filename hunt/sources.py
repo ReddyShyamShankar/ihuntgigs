@@ -154,25 +154,47 @@ def _careers(name, ats, slug, company, markets, remote_only=True) -> list[dict]:
     return out
 
 
+def config() -> dict:
+    return yaml.safe_load((DATA / "sources.yaml").read_text()) or {}
+
+
 def pick_sources() -> set[str]:
     """Sources marked `flow: pick` in sources.yaml: the owner picks before the AI writes (Upwork-bot flow)."""
     cfg = yaml.safe_load((DATA / "sources.yaml").read_text())
     return {s["name"] for group in ("rss", "json") for s in cfg.get(group, []) or [] if s.get("flow") == "pick"}
 
 
-def collect() -> tuple[list[dict], list[str]]:
-    """Run every collector. One broken source never stops the others."""
-    cfg = yaml.safe_load((DATA / "sources.yaml").read_text())
+def collect(stats: dict | None = None, cfg: dict | None = None) -> tuple[list[dict], list[str]]:
+    """Run every switched-on collector. One broken source never stops the others.
+    `stats` (if given) is filled with name → {"count": leads found, "error": text or None}."""
+    from . import registry
+    own = cfg is None
+    if own:
+        cfg = yaml.safe_load((DATA / "sources.yaml").read_text())
+    over = registry.saved_overrides() if own else {}
+    reg = registry.load(cfg, overrides=over or None)
+    # per-line switch in sources.yaml, unless the dashboard set this source on or off
+    on = lambda name, item: (bool(over[name].get("enabled")) if isinstance(over.get(name), dict) and  # noqa: E731
+                             "enabled" in over[name] else item.get("enabled", True) is not False)
     leads, errors = [], []
     jobs = [("news:" + n.get("region", "US"), _rss, (_gnews_url(n["q"], n.get("region", "US")), "funding"))
-            for n in cfg.get("news", [])]
-    jobs += [(s["name"], _rss, (s["url"], s["kind"], s.get("title_must_include"))) for s in cfg.get("rss", [])]
-    jobs += [(s["name"], _json, (s["url"], s["kind"], s.get("format"), s.get("markets"))) for s in cfg.get("json", [])]
+            for n in cfg.get("news", []) if on("news:" + n.get("region", "US"), n)]
+    jobs += [(s["name"], _rss, (s["url"], s["kind"], s.get("title_must_include"))) for s in cfg.get("rss", []) if on(s["name"], s)]
+    jobs += [(s["name"], _json, (s["url"], s["kind"], s.get("format"), s.get("markets")))
+             for s in cfg.get("json", []) if on(s["name"], s)]
     jobs += [("careers:" + c["slug"], _careers, (c["ats"], c["slug"], c["company"], c.get("markets", []),
-                                                 c.get("remote_only", True))) for c in cfg.get("careers", [])]
+                                                 c.get("remote_only", True))) for c in cfg.get("careers", []) if on("careers:" + c["slug"], c)]
     for name, fn, args in jobs:
+        if not reg.get(name, {"enabled": True})["enabled"]:
+            continue  # switched off under `overrides:`
+        row = stats.setdefault(name, {"count": 0, "error": None}) if stats is not None else {}
         try:
-            leads += [l for l in fn(name, *args) if l["url"]]
+            got = [l for l in fn(name, *args) if l["url"]]
+            leads += got
+            if stats is not None:
+                row["count"] += len(got)
         except Exception as ex:  # noqa: BLE001 — report and continue
             errors.append(f"{name}: {ex}")
+            if stats is not None:
+                row["error"] = (f"{row['error']}; " if row["error"] else "") + str(ex)[:300]
     return leads, errors

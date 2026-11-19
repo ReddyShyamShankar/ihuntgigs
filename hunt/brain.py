@@ -95,16 +95,17 @@ _client = None
 _model = CHATGPT_MODEL
 
 
-def _ask(user_text: str, schema: dict) -> dict | None:
+def _ask(user_text: str, schema: dict, system: str | None = None) -> dict | None:
+    system = system or SYSTEM
     if AI == "chatgpt":
         global _model
         if not _model:  # first model the account lists, unless HUNT_CHATGPT_MODEL picks one
             _model = chatgpt.models()[0]["slug"]
-        return chatgpt.respond(SYSTEM, user_text, schema, _model, CHATGPT_EFFORT or None)
-    return _ask_claude(user_text, schema)
+        return chatgpt.respond(system, user_text, schema, _model, CHATGPT_EFFORT or None)
+    return _ask_claude(user_text, schema, system)
 
 
-def _ask_claude(user_text: str, schema: dict) -> dict | None:
+def _ask_claude(user_text: str, schema: dict, system: str | None = None) -> dict | None:
     import anthropic
 
     global _client
@@ -115,7 +116,7 @@ def _ask_claude(user_text: str, schema: dict) -> dict | None:
         betas=["server-side-fallback-2026-07-01"],
         fallbacks="default",  # if a safety check declines, the API retries on a fallback model
         output_config={"effort": EFFORT, "format": {"type": "json_schema", "schema": schema}},
-        system=[{"type": "text", "text": SYSTEM, "cache_control": {"type": "ephemeral"}}],
+        system=[{"type": "text", "text": system or SYSTEM, "cache_control": {"type": "ephemeral"}}],
         messages=[{"role": "user", "content": user_text}],
     )
     if resp.stop_reason == "refusal":

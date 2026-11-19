@@ -95,3 +95,35 @@ careers:
   - {company: CoinMarketCap, ats: lever, slug: coinmarketcap, markets: [crypto]}
   - {company: Consensys, ats: greenhouse, slug: consensys, markets: [crypto]}
   - {company: Blockworks, ats: ashby, slug: blockworks, markets: [crypto]}
+
+# Phase 1 (PRD §18): finance YouTube channels via the official YouTube Data API (needs YOUTUBE_API_KEY).
+# Every channel found is stored as a prospect — no size or quality filter. Each query digs one results
+# page deeper every run. Budget: Google gives 10,000 units/day; one search ≈ 151 units (≈50 channels).
+youtube:
+  daily_units: 9000        # stop here; 1,000 kept spare
+  searches_per_run: 2      # runs every hour → up to ~48 searches/day, capped by daily_units
+  queries:
+    - crypto trading
+    - bitcoin analysis
+    - altcoins investing
+    - defi explained
+    - crypto news today
+    - forex trading strategy
+    - forex price action
+    - gold trading xauusd
+    - prop firm challenge
+    - stock market analysis
+    - stock investing for beginners
+    - dividend investing
+    - options trading strategy
+    - swing trading stocks
+    - day trading futures
+    - technical analysis trading
+    - indian stock market
+    - nifty banknifty options
+    - share market analysis india
+    - personal finance investing
+
+# More sites that are never a channel's own site (brokers, exchanges) for the contact finder,
+# on top of the list in hunt/contacts.py. One per line.
+extra_not_a_site:

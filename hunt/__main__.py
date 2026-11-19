@@ -6,6 +6,8 @@
   python -m hunt digest    # send the weekly per-source summary
   python -m hunt login     # sign in with ChatGPT (on your own computer), then deploy/push-login.sh
   python -m hunt models    # list the ChatGPT models your plan offers
+  python -m hunt dashboard # web dashboard (HUNT_DASH_HOST:HUNT_DASH_PORT, default 127.0.0.1:8090)
+  python -m hunt adduser NAME [--owner]   # new dashboard user; prints a one-time setup link (24 h)
   python -m hunt apply-queue [--peek] / apply-result ID STATUS [note] / apply-say TEXT   # used by applier/
 """
 import json
@@ -14,21 +16,39 @@ import threading
 import time
 import traceback
 
-from . import brain, chatgpt, gmail_alerts, pick, store, telegram
+from . import (brain, chatgpt, contacts, followups, gmail_alerts, outreach, pick, pitch, registry, research,
+               sender, store, telegram, youtube)
 from .config import BID_RESERVE, MAX_AI_PER_DAY, MAX_AI_PER_RUN, MIN_SCORE, RUN_EVERY_MINUTES, TELEGRAM_CHAT_ID
-from .filters import keep
+from .filters import keep, prescore
+from . import settings, sources
 from .sources import collect, pick_sources
 
-PRIORITY = {"ask": 0, "funding": 1, "job": 2}
 _lock = threading.Lock()
 
 
 def gather(con, dry=False) -> list[dict]:
-    leads, errors = collect()
-    try:
-        leads += gmail_alerts.collect(None if dry else con)
-    except Exception as ex:  # noqa: BLE001 — Gmail trouble must not stop the other sources
-        errors.append(f"linkedin_alerts (gmail): {ex}")
+    stats: dict = {}
+    leads, errors = collect(stats)
+    reg = registry.load()
+    if reg["linkedin_alerts"]["enabled"] and gmail_alerts.enabled():
+        try:
+            got = gmail_alerts.collect(None if dry else con)
+            leads += got
+            stats["linkedin_alerts"] = {"count": len(got), "error": None}
+        except Exception as ex:  # noqa: BLE001 — Gmail trouble must not stop the other sources
+            errors.append(f"linkedin_alerts (gmail): {ex}")
+            stats["linkedin_alerts"] = {"count": 0, "error": str(ex)[:300]}
+    # Dry runs skip YouTube: it would spend quota and move the page cursor past channels it never saves.
+    if not dry and "youtube" in reg and reg["youtube"]["enabled"] and youtube.enabled():
+        got, st = youtube.collect(con, sources.config().get("youtube") or {})
+        leads += got
+        stats["youtube"] = st
+        if st["error"]:
+            errors.append(f"youtube: {st['error']}")
+    if not dry:
+        store.sync_sources(con, reg)
+        for name, st in stats.items():
+            store.source_ran(con, name, st["count"], st["error"])
     fresh, seen_keys = [], set()
     picky = pick_sources()
     for lead in leads:
@@ -38,8 +58,13 @@ def gather(con, dry=False) -> list[dict]:
         ok, markets = keep(lead)
         lead["markets"] = markets
         if not dry:
-            store.add(con, lead, markets, ("pick_new" if lead["source"] in picky else "queued") if ok else "filtered")
-        if ok:
+            # Pick-flow sources (Freelancer) always reach the phone as a pick card: the owner decides.
+            if lead["kind"] == "prospect":  # Phase 1 prospects wait for research (B5), not the old job AI
+                status = "prospect_new"
+            else:
+                status = "pick_new" if lead["source"] in picky else ("queued" if ok else "filtered")
+            store.add(con, lead, markets, status, prescore=prescore(lead, ok, markets))
+        if ok or lead["source"] in picky or lead["kind"] == "prospect":
             fresh.append(lead)
     print(f"collected {len(leads)} items, {len(fresh)} new + relevant by keywords")
     for e in errors:
@@ -51,9 +76,51 @@ def run_cycle() -> str:
     with _lock:
         con = store.db()
         gather(con)
+        store.requeue_pick(con, pick_sources())  # older Freelancer rows left in the AI queue
         picked = pick.send_new_cards(con)
-        todo = store.queued(con)
-        todo.sort(key=lambda l: (PRIORITY.get(l["kind"], 9), -l["created_at"]))
+        try:  # B4: find an email / social route for new YouTube prospects (plain web pages, no AI)
+            found = contacts.run(con)
+        except Exception as ex:  # noqa: BLE001 — never block the job queue
+            found = {"email": 0, "social": 0, "manual": 0}
+            print("contact finder error:", ex)
+        try:  # B5: six-point brief + lanes + fit score for prospects with a contact route (own AI budget)
+            studied = research.run(con)
+        except Exception as ex:  # noqa: BLE001 — never block the job queue
+            studied = {"researched": 0, "other_language": 0, "errors": 0, "paused": ""}
+            print("research error:", ex)
+        if studied["paused"]:
+            _warn_once(con, "research_paused", f"⏸ Research paused: {studied['paused']}")
+        try:  # B6: short personal pitch for researched prospects (own AI budget); approval comes in B7
+            wrote = pitch.run(con)
+        except Exception as ex:  # noqa: BLE001 — never block the job queue
+            wrote = {"drafted": 0, "flagged": 0, "errors": 0, "paused": ""}
+            print("pitch writer error:", ex)
+        if wrote["paused"]:
+            _warn_once(con, "pitch_paused", f"⏸ Pitch writer paused: {wrote['paused']}")
+        try:  # B8: read replies, bounces and unsubscribes FIRST, so nothing below writes to or mails someone who answered
+            heard = sender.read_run(con)
+        except Exception as ex:  # noqa: BLE001 — never block the job queue
+            heard = {"reply": 0, "bounce": 0}
+            print("inbox reader error:", ex)
+        try:  # B8b: follow-up drafts for sent pitches with no reply (off unless HUNT_FOLLOWUPS=on)
+            nudged = followups.run(con)
+        except Exception as ex:  # noqa: BLE001 — never block the job queue
+            nudged = {"drafted": 0, "errors": 0, "paused": ""}
+            print("follow-up error:", ex)
+        try:  # B7: approve / edit / skip cards on the phone for fit-60+ pitches
+            carded = outreach.send_new_cards(con)
+        except Exception as ex:  # noqa: BLE001 — never block the job queue
+            carded = 0
+            print("approval cards error:", ex)
+        try:  # B8: email approved pitches (only when switched on)
+            mailed = sender.send_run(con)
+        except Exception as ex:  # noqa: BLE001 — never block the job queue
+            mailed = {"sent": 0, "waiting": 0, "off": ""}
+            print("sender error:", ex)
+        if mailed["off"] and mailed["waiting"]:
+            _warn_once(con, "send_off", f"✉️ {mailed['waiting']} approved email(s) waiting — not sent because "
+                                        f"{mailed['off']}. Send them by hand or finish the inbox setup.")
+        todo = store.queued(con, exclude_sources=pick_sources())  # best first; nothing dropped
         sent = low = 0
         budget = min(MAX_AI_PER_RUN, store.lead_ai_left(con, MAX_AI_PER_DAY, BID_RESERVE))
         paused = ""
@@ -76,6 +143,10 @@ def run_cycle() -> str:
                 store.update(con, lead["id"], status="low", score=(d or {}).get("score", 0), data=d or {})
                 low += 1
                 continue
+            if d.get("company") and not lead.get("prospect_id"):  # news: link the business the AI named
+                pid = store.upsert_prospect(con, company=d["company"], source=lead["source"])
+                if pid:
+                    store.update(con, lead["id"], prospect_id=pid)
             if store.company_recent(con, d["company"]):
                 store.update(con, lead["id"], status="duplicate", score=d["score"], data=d)
                 continue
@@ -98,7 +169,11 @@ def run_cycle() -> str:
             gmail_alerts.mark_done(con)
         except Exception as ex:  # noqa: BLE001
             print("gmail mark-read error:", ex)
-        summary = f"cycle done: {picked} pick cards, {sent} to phone, {low} below {MIN_SCORE}, {max(0, len(todo) - budget)} still queued (AI used today: {store.ai_used_today(con)}/{MAX_AI_PER_DAY}, bids {store.bid_ai_used_today(con)}, reserved for bids {BID_RESERVE})"
+        summary = (f"contacts: {found['email']} email, {found['social']} social, {found['manual']} manual · "
+                   f"research: {studied['researched']} done, {studied['other_language']} not English, "
+                   f"{studied['errors']} errors (today {research.used_today(con)}/{research.PER_DAY}) · "
+                   f"pitches: {wrote['drafted']} drafted, {wrote['flagged']} flagged, {wrote['errors']} errors, {nudged['drafted']} follow-ups, {carded} to approve · email: {mailed['sent']} sent, {mailed['waiting']} waiting, {heard['reply']} replies, {heard['bounce']} bounces · "
+                   f"cycle done: {picked} pick cards, {sent} to phone, {low} below {MIN_SCORE}, {max(0, len(todo) - budget)} still queued (AI used today: {store.ai_used_today(con)}/{MAX_AI_PER_DAY}, bids {store.bid_ai_used_today(con)}, reserved for bids {BID_RESERVE})")
         if paused:
             summary += f" — paused: {paused}"
         print(summary)
@@ -119,14 +194,34 @@ def digest_text(days=7) -> str:
     s = store.stats(store.db(), days)
     lines = [f"📊 Hunt — last {days} days (per source)"]
     for src, st in sorted(s.items()):
-        shown = st.get("to_phone", 0) + sum(st.get(k, 0) for k in ("sent", "skipped", "replied", "won", "lost"))
+        shown = sum(st.get(k, 0) for k in ("to_phone", outreach.WAITING, outreach.APPROVED)) + sum(st.get(k, 0) for k in ("sent", "skipped", "replied", "won", "lost"))
         shown += sum(st.get(k, 0) for k in pick.STATUSES - {"pick_new"})
         lines.append(f"{src}: shown {shown} · sent {st.get('sent', 0) + st.get('replied', 0) + st.get('won', 0) + st.get('lost', 0)}"
                      f" · replied {st.get('replied', 0) + st.get('won', 0) + st.get('lost', 0)} · won {st.get('won', 0)}")
     return "\n".join(lines)
 
 
-BUTTON_ACTIONS = {"approve", "sent", "skipped", "replied", "won", "lost", "noop"} | set(pick.TAPS)
+def sources_text(con) -> str:
+    """Phone view of the source registry: totals per tier, what is off, and what is broken."""
+    rows = store.sources_list(con)
+    if not rows:
+        return "No source runs recorded yet — wait for the next cycle or send /run."
+    on = [r for r in rows if r["enabled"]]
+    tiers = {t: sum(1 for r in on if r["tier"] == t) for t in registry.TIERS}
+    lines = [f"🗂 Sources: {len(on)} on, {len(rows) - len(on)} off",
+             f"Tiers (on): open {tiers['open']} · limited {tiers['limited']} · manual {tiers['manual']}",
+             f"Auto-send on: {sum(1 for r in on if r['auto_send'] == 'on')} (all others draft only)"]
+    broken = [r for r in on if r["last_error"]]
+    if broken:
+        lines.append(f"\n⚠️ Broken last run ({len(broken)}):")
+        lines += [f"• {r['name']} (×{r['fails']}): {(r['last_error'] or '')[:80]}" for r in broken[:15]]
+    off = [r["name"] for r in rows if not r["enabled"]]
+    if off:
+        lines.append("\n⏸ Off: " + ", ".join(off[:30]))
+    return "\n".join(lines)
+
+
+BUTTON_ACTIONS = {"approve", "sent", "skipped", "replied", "won", "lost", "noop"} | set(pick.TAPS) | outreach.TAPS
 STATUS_OF = {"approve": "approved"}
 APPLY_DONE = {"applied", "needs_you", "failed"}
 
@@ -171,6 +266,14 @@ def handle_update(con, u) -> None:
         if action not in BUTTON_ACTIONS or not lead_id:
             return
         row = store.get(con, lead_id)
+        if action == "noop" and outreach.owns(row):
+            telegram.call("answerCallbackQuery", callback_query_id=q["id"])
+            return
+        if action != "noop" and outreach.owns(row, action):  # prospect pitch cards (B7) come first
+            note = outreach.tap(con, action, lead_id, q.get("message", {}).get("message_id"))
+            telegram.call("answerCallbackQuery", callback_query_id=q["id"], text=note,
+                          show_alert=action == "pedit")
+            return
         if action != "noop" and pick.owns(row, action):
             note = pick.tap(con, action, lead_id, q.get("message", {}).get("message_id"))
             telegram.call("answerCallbackQuery", callback_query_id=q["id"], text=note)
@@ -195,10 +298,19 @@ def handle_update(con, u) -> None:
         return  # ignore strangers (including /start once the owner is set)
     if text.startswith("/stats"):
         telegram.say(digest_text())
+    elif text.startswith("/sources"):
+        telegram.say(sources_text(con))
     elif text.startswith("/applyall"):
         n = approve_all(con)
         telegram.say(f"🚀 {n} lead(s) queued for auto-apply. Your Mac applies them next time it checks in."
                      if n else "Nothing waiting — no new cards from the last 3 days.")
+    elif text.startswith("/approveall") and settings.get(con, "approval_mode", "one") != "bulk":
+        telegram.say("Approval mode is one-by-one. Switch it to bulk in the dashboard Settings to use /approveall.")
+    elif text.startswith("/approveall"):
+        done, held = outreach.approve_all(con)
+        telegram.say(f"🔒 {done} pitch(es) approved." + (f" {held} left for a one-by-one look "
+                     "(warnings, manual-tier source, or fit under the bar)." if held else "")
+                     if done or held else "No pitches waiting for approval.")
     elif text.startswith("/later"):
         n = pick.resend_later(con)
         telegram.say(f"⏰ {n} parked card(s) sent again below." if n else "Nothing parked.")
@@ -208,6 +320,9 @@ def handle_update(con, u) -> None:
     elif msg.get("reply_to_message"):
         row = store.by_message(con, msg["reply_to_message"]["message_id"])
         if not row:
+            return
+        if outreach.owns(row):
+            outreach.reply(con, row, text)
             return
         if pick.owns(row):
             pick.reply(con, row, text)
@@ -247,9 +362,10 @@ def bot() -> None:
             time.sleep(RUN_EVERY_MINUTES * 60)
 
     def writer():  # writes bids the owner asked for (✍️ / 🔁 / reply) within seconds, not at the next hourly cycle
-        con3 = store.db()
+        con3 = None
         while True:
             try:
+                con3 = con3 or store.db()  # opened inside the retry loop: a busy database can't kill this thread
                 pick.process_writes(con3)
             except Exception:  # noqa: BLE001
                 traceback.print_exc()
@@ -321,6 +437,15 @@ def main() -> None:
         telegram.say(" ".join(sys.argv[2:])[:3500])
     elif cmd == "digest":
         telegram.say(digest_text()) if telegram.enabled() else print(digest_text())
+    elif cmd == "dashboard":
+        from . import dashboard
+        dashboard.serve()
+    elif cmd == "adduser" and len(sys.argv) > 2:
+        from . import dashboard
+        con = store.db()
+        uid, token = dashboard.add_user(con, sys.argv[2], "owner" if "--owner" in sys.argv else "member")
+        print(f"User #{uid} added. Open this link once (valid 24 h) and scan the QR with an authenticator app:\n"
+              f"  <dashboard address>/setup/{token}")
     else:
         print(__doc__)
 

@@ -39,3 +39,22 @@ def keep(lead: dict) -> tuple[bool, list[str]]:
     if lead["kind"] == "funding" and (not SIGNAL.search(lead["title"]) or NOISE.search(lead["title"])):
         return False, markets
     return True, markets
+
+
+KIND_POINTS = {"ask": 15, "funding": 10, "job": 5}
+
+
+def prescore(lead: dict, kept: bool, markets: list[str]) -> int:
+    """Free 0–100 guess of how good a lead is, from keywords only. It only orders the AI's waiting
+    line (best first); it never removes a lead."""
+    title = (lead.get("title") or "").lower()
+    score = 12 * min(len(markets), 3) + KIND_POINTS.get(lead.get("kind"), 0)
+    if kept:
+        score += 30
+    if has_role(title):
+        score += 15
+    if any(_has(title, w.strip()) for w in JOB_EXCLUDE):
+        score -= 15
+    if lead.get("kind") == "funding" and SIGNAL.search(title):
+        score += 5
+    return max(0, min(100, score))
