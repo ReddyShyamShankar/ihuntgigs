@@ -597,7 +597,8 @@ def _current(con) -> dict:
             "followup_lanes": list(settings.get(con, "followup_lanes", sorted(followups.LANES))),
             "inbox_daily": int(settings.get(con, "inbox_daily", sender.PER_INBOX)),
             "active_lanes": list(settings.get(con, "active_lanes", list(settings.LANES))),
-            "learn_edits": bool(settings.get(con, "learn_edits", pitch.LEARN))}
+            "learn_edits": bool(settings.get(con, "learn_edits", pitch.LEARN)),
+            "business_hours": bool(settings.get(con, "business_hours", False))}
 
 
 def _onoff(name: str, value: bool) -> str:
@@ -622,22 +623,26 @@ def settings_page(con, user, note: str = "") -> str:
         ("Daily email limit per inbox", f"<input name=inbox_daily type=number min=1 max=200 value={c['inbox_daily']}>"),
         ("Active lanes <small class=mute>(pitches are written only for these)</small>", _lane_boxes("al", c["active_lanes"])),
         ("Learn from edits", _onoff("learn_edits", c["learn_edits"])),
+        ("Send only in the prospect's business hours <small class=mute>(Mon–Fri 9–17 their time)</small>",
+         _onoff("business_hours", c["business_hours"])),
     ]
     fixed = [("Auto-send per source", "<a href=/sources>On the Sources screen</a>"),
              ("Signals outside India only", "On — fixed rule"),
-             ("Send in prospect's business hours", "<span class=mute>Comes with real sending (after the inbox is set up)</span>"),
              ("Intent search phrases", "<span class=mute>Comes with Layer 2 intent search</span>")]
     trs = "".join(f"<tr><td>{k}</td><td>{v}</td></tr>" for k, v in rows)
     trs2 = "".join(f"<tr><td>{k}</td><td>{v}</td></tr>" for k, v in fixed)
+    check = "".join(f"<tr><td>{'✅' if done else '❌'} {e(step)}</td><td class=mute>{'' if done else e(todo)}</td></tr>"
+                    for step, done, todo in sender.readiness(con))
     return layout("Settings", (f"<div class=card>{e(note)}</div>" if note else "")
                   + f"<h1>Settings</h1><form method=post action=/settings><table>{trs}</table>"
-                    f"<p><button>Save settings</button></p></form><h2>Elsewhere / later</h2><table>{trs2}</table>", user)
+                    f"<p><button>Save settings</button></p></form><h2>Ready to send real emails?</h2><table>{check}</table>"
+                    f"<h2>Elsewhere / later</h2><table>{trs2}</table>", user)
 
 
 def settings_action(con, user, form: dict) -> str:
     raw = {"approval_mode": form.get("approval_mode", ""), "followups": form.get("followups", ""),
            "followup_days": form.get("followup_days", ""), "inbox_daily": form.get("inbox_daily", ""),
-           "learn_edits": form.get("learn_edits", ""),
+           "learn_edits": form.get("learn_edits", ""), "business_hours": form.get("business_hours", ""),
            "followup_lanes": ",".join(x for x in settings.LANES if form.get(f"fl_{x}") == "on"),
            "active_lanes": ",".join(x for x in settings.LANES if form.get(f"al_{x}") == "on")}
     cur, changed, errors = _current(con), [], []

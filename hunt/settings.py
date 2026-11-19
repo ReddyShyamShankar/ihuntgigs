@@ -28,7 +28,7 @@ def get(con, name: str, default=None):
 def clean(name: str, raw: str):
     """Turn a form value into a stored value. Raises ValueError with a plain message if it is wrong."""
     raw = (raw or "").strip()
-    if name in ("followups", "learn_edits"):
+    if name in ("followups", "learn_edits", "business_hours"):
         return raw == "on"
     if name == "approval_mode":
         if raw not in APPROVAL_MODES:

@@ -1,0 +1,48 @@
+[Unit]
+Description=Hunt dashboard website (private: 127.0.0.1:8090, behind Caddy once a domain is set)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hunt
+Group=hunt
+WorkingDirectory=/opt/hunt
+# Read by systemd (as root) before dropping to the hunt user; the file itself stays root-only.
+EnvironmentFile=/opt/hunt/.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=HUNT_DASH_HOST=127.0.0.1
+ExecStart=/opt/hunt/.venv/bin/python -u -m hunt dashboard
+Restart=always
+RestartSec=15
+# Resource limits
+MemoryMax=200M
+CPUQuota=25%
+# Sandbox: Hunt can only write its own data folder and only talk to the internet.
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/opt/hunt/data
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+
+[Install]
+WantedBy=multi-user.target

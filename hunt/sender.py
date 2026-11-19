@@ -26,6 +26,7 @@ import os
 import re
 import time
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from . import brain, mailer, pitch, registry, settings, store, telegram
 
@@ -65,6 +66,29 @@ def blockers() -> list[str]:
     if not POSTAL:
         out.append("postal address missing (HUNT_POSTAL_ADDRESS)")
     return out
+
+
+def readiness(con, reg: dict | None = None, check_signin: bool = False) -> list[tuple[str, bool, str]]:
+    """The ready-to-send checklist, in the order to do it: (step, done?, what to do)."""
+    try:
+        reg = registry.load() if reg is None else reg
+    except Exception:  # noqa: BLE001
+        reg = {}
+    auto = sorted(n for n, e in reg.items() if e.get("enabled") and registry.can_auto_send(n, reg))
+    steps = [("Postal address for the email footer", bool(POSTAL), "set HUNT_POSTAL_ADDRESS on the server"),
+             ("Outreach inbox(es) listed", bool(mailer.inboxes()), "set HUNT_INBOXES on the server"),
+             ("Microsoft app sign-in details", mailer.enabled(), "set MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET")]
+    if check_signin and mailer.enabled():
+        try:
+            mailer.token()
+            steps.append(("Microsoft sign-in works", True, ""))
+        except Exception as ex:  # noqa: BLE001
+            steps.append(("Microsoft sign-in works", False, f"sign-in failed: {str(ex)[:120]}"))
+    limit = int(settings.get(con, "inbox_daily", PER_INBOX))
+    steps += [("A source allowed to auto-send", bool(auto), ", ".join(auto) if auto else "Sources screen → Auto-send"),
+              (f"Daily limit per inbox ({limit})", limit <= 50, "keep it low during warm-up (start 10–20)"),
+              ("Sending switched on", SEND_ON, "last step: HUNT_SEND=on on the server")]
+    return steps
 
 
 def auto_send(source: str, reg: dict | None = None) -> bool:
@@ -212,8 +236,36 @@ def send_one(con, row, inbox: str, post=None) -> str:
     return "sent"
 
 
+# Business hours (PRD §15, off by default): email only Mon–Fri 9:00–17:00 in the prospect's country.
+# One main time zone per country (the business capital); unknown country = no wait.
+BIZ_HOURS = (9, 17)
+COUNTRY_TZ = {
+    "US": "America/New_York", "CA": "America/Toronto", "MX": "America/Mexico_City", "BR": "America/Sao_Paulo",
+    "AR": "America/Argentina/Buenos_Aires", "GB": "Europe/London", "IE": "Europe/Dublin", "DE": "Europe/Berlin",
+    "FR": "Europe/Paris", "ES": "Europe/Madrid", "IT": "Europe/Rome", "NL": "Europe/Amsterdam",
+    "CH": "Europe/Zurich", "PL": "Europe/Warsaw", "SE": "Europe/Stockholm", "PT": "Europe/Lisbon",
+    "TR": "Europe/Istanbul", "RU": "Europe/Moscow", "UA": "Europe/Kyiv", "ZA": "Africa/Johannesburg",
+    "NG": "Africa/Lagos", "KE": "Africa/Nairobi", "EG": "Africa/Cairo", "AE": "Asia/Muscat", "SA": "Asia/Riyadh",
+    "IL": "Asia/Jerusalem", "IN": "Asia/Kolkata", "PK": "Asia/Karachi", "BD": "Asia/Dhaka", "SG": "Asia/Singapore",
+    "MY": "Asia/Kuala_Lumpur", "ID": "Asia/Jakarta", "PH": "Asia/Manila", "TH": "Asia/Bangkok",
+    "VN": "Asia/Ho_Chi_Minh", "HK": "Asia/Hong_Kong", "CN": "Asia/Shanghai", "JP": "Asia/Tokyo", "KR": "Asia/Seoul",
+    "AU": "Australia/Sydney", "NZ": "Pacific/Auckland",
+}
+
+
+def business_hours_now(row, now: float | None = None) -> bool:
+    """True if it is a weekday, 9:00–17:00, where the prospect is (or their country is unknown)."""
+    data = json.loads(row["data"] or "{}")
+    tz = COUNTRY_TZ.get(((data.get("extra") or {}).get("country") or "").upper())
+    if not tz:
+        return True
+    t = datetime.fromtimestamp(time.time() if now is None else now, ZoneInfo(tz))
+    return t.weekday() < 5 and BIZ_HOURS[0] <= t.hour < BIZ_HOURS[1]
+
+
 def send_run(con, post=None, reg: dict | None = None) -> dict:
-    counts = {"sent": 0, "blocked": 0, "needs_manual": 0, "error": 0, "waiting": 0, "stuck": 0, "off": ""}
+    counts = {"sent": 0, "blocked": 0, "needs_manual": 0, "error": 0, "waiting": 0, "stuck": 0, "off": "",
+              "later": 0}
     flush_alerts(con)
     counts["stuck"] = _hand_over_stuck(con)
     rows = con.execute("SELECT * FROM leads WHERE kind='prospect' AND status IN ('pitch_approved','fu_approved') "
@@ -227,9 +279,13 @@ def send_run(con, post=None, reg: dict | None = None) -> dict:
         counts["waiting"] = len(rows)
         return counts
     reg = registry.load() if reg is None else reg
+    biz = bool(settings.get(con, "business_hours", False))
     for row in rows:
         if not auto_send(row["source"], reg):
             continue  # draft-only source: the owner sends by hand
+        if biz and not business_hours_now(row):
+            counts["later"] += 1  # waits for the prospect's working hours (checked again every hour)
+            continue
         inbox = pick_inbox(con) if counts["sent"] < PER_RUN else ""
         if not inbox:
             counts["waiting"] += 1  # this run's share or every inbox's daily limit is used up

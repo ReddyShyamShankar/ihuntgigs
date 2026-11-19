@@ -7,6 +7,7 @@
   python -m hunt login     # sign in with ChatGPT (on your own computer), then deploy/push-login.sh
   python -m hunt models    # list the ChatGPT models your plan offers
   python -m hunt dashboard # web dashboard (HUNT_DASH_HOST:HUNT_DASH_PORT, default 127.0.0.1:8090)
+  python -m hunt sendcheck # checklist: what is still missing before real emails go out
   python -m hunt adduser NAME [--owner]   # new dashboard user; prints a one-time setup link (24 h)
   python -m hunt apply-queue [--peek] / apply-result ID STATUS [note] / apply-say TEXT   # used by applier/
 """
@@ -437,6 +438,9 @@ def main() -> None:
         telegram.say(" ".join(sys.argv[2:])[:3500])
     elif cmd == "digest":
         telegram.say(digest_text()) if telegram.enabled() else print(digest_text())
+    elif cmd == "sendcheck":  # what is still missing before real emails can go out
+        for step, done, todo in sender.readiness(store.db(), check_signin=True):
+            print(("✅ " if done else "❌ ") + step + ("" if done or not todo else f" — {todo}"))
     elif cmd == "dashboard":
         from . import dashboard
         dashboard.serve()

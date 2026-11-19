@@ -27,8 +27,10 @@ $SSH "$HOST" 'set -e
   find data -maxdepth 1 -type f ! -name "*.yaml" -exec chown hunt:hunt {} + -exec chmod 600 {} +
   chmod 644 data/*.yaml
   cp deploy/hunt.service /etc/systemd/system/hunt.service
+  cp deploy/hunt-dash.service /etc/systemd/system/hunt-dash.service   # dashboard: 127.0.0.1 only
   systemctl daemon-reload
-  systemctl enable hunt >/dev/null 2>&1 || true
+  systemctl enable hunt hunt-dash >/dev/null 2>&1 || true
+  systemctl restart hunt-dash && sleep 2 && echo "dashboard: $(systemctl is-active hunt-dash)"
   if grep -q "^TELEGRAM_BOT_TOKEN=." .env && { [ -f data/chatgpt.json ] || grep -q "^ANTHROPIC_API_KEY=." .env; }; then
     systemctl restart hunt && sleep 5 && systemctl --no-pager --lines=5 status hunt
   else
