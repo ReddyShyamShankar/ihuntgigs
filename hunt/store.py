@@ -63,7 +63,7 @@ LEAD_COLUMNS = {"prospect_id": "INTEGER", "lanes": "TEXT", "stage": "TEXT", "sta
 # PRD funnel: found → researched → drafted → approved → sent → replied → call_booked → won
 # (side exits: skipped, lost, needs_manual). Every status maps to one stage; `error` keeps the old one.
 STAGE_OF = {
-    "filtered": "found", "queued": "found", "prospect_new": "found", "prospect_ready": "found", "researched": "researched", "other_language": "skipped", "pick_new": "found", "pick": "found", "later": "found",
+    "filtered": "found", "queued": "found", "prospect_new": "found", "prospect_ready": "found", "researched": "researched", "other_language": "skipped", "pick_new": "found", "not_contract": "skipped", "off_niche": "skipped", "pick": "found", "later": "found",
     "to_write": "found", "low": "researched", "duplicate": "researched", "draft_failed": "researched",
     "to_phone": "drafted", "drafted": "drafted", "to_approve": "drafted", "pitch_approved": "approved", "sending": "approved", "fu_drafted": "sent", "fu_to_approve": "sent", "fu_approved": "sent", "fu_sending": "sent", "bounced": "needs_manual", "unsubscribed": "lost", "blocked": "skipped", "approved": "approved", "bid_approved": "approved",
     "applying": "approved", "applied": "sent", "sent": "sent", "replied": "replied",
@@ -201,6 +201,25 @@ def queued(con, exclude_sources=()) -> list[dict]:
     rows.sort(key=lambda r: ((r["prescore"] or 0) - AGE_PENALTY_PER_DAY * (now - r["created_at"]) / 86400,
                              r["created_at"]), reverse=True)
     return rows
+
+
+def retire_old_queue(con, is_contract, pick_sources=()) -> int:
+    """Contract-only switch (2026-11-20): nothing uses the old AI queue any more. Funding news is retired,
+    full-time jobs become `not_contract`, and contract jobs move to the pick flow (cards only go out for
+    leads from the last 3 days; older ones stay stored)."""
+    rows = con.execute("SELECT id, kind, source, status, title, summary, data FROM leads "
+                       "WHERE status IN ('queued','filtered')").fetchall()
+    for r in rows:
+        lead = {"kind": r["kind"], "title": r["title"], "summary": r["summary"],
+                "extra": (json.loads(r["data"]) if r["data"] else {}).get("extra") or {}}
+        if r["kind"] not in ("job", "ask"):
+            status = "skipped"
+        elif not is_contract(lead):
+            status = "not_contract"
+        else:  # `filtered` = the keyword check missed it (outside the niche), unless the site already filters
+            status = "off_niche" if r["status"] == "filtered" and r["source"] not in set(pick_sources) else "pick_new"
+        update(con, r["id"], status=status)
+    return len(rows)
 
 
 def requeue_pick(con, pick_sources) -> int:

@@ -4,7 +4,7 @@
   automatic rewrites until it passes → owner reviews → ✅ Approve locks the exact text.
 
 Sending the locked bid is Step 2 (Freelancer's official bid API). Until then the owner bids by hand
-and taps "✅ I bid myself".
+and taps "✅ I applied". Since 2026-11-20 every contract job source uses this flow.
 """
 import json
 import time
@@ -177,7 +177,7 @@ def tap(con, action: str, lead_id: str, message_id=None) -> str:
         return "That's an old version — approve the newest bid"
     if action == "skipped":
         if status in LOCKED:
-            return "Already approved — use ✅ I bid myself or leave it"
+            return "Already approved — use ✅ I applied or leave it"
         store.update(con, lead_id, status="skipped")
     elif action == "sent":
         if status != "bid_approved":
@@ -205,8 +205,8 @@ def tap(con, action: str, lead_id: str, message_id=None) -> str:
         store.update(con, lead_id, status="bid_approved", data=d)
     rebutton(con, lead_id)
     return {"write": "Writing — the bid arrives in a minute", "redo": "Rewriting…", "later": "Parked",
-            "bidok": "🔒 Locked. Bid it on Freelancer, then tap ✅ I bid myself", "skipped": "Skipped",
-            "sent": "Marked as bid"}.get(action, "OK")
+            "bidok": "🔒 Locked. Send it on the job's page, then tap ✅ I applied", "skipped": "Skipped",
+            "sent": "Marked as applied"}.get(action, "OK")
 
 
 def reply(con, row, text: str) -> None:

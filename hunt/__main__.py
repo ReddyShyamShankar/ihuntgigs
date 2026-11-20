@@ -20,11 +20,22 @@ import traceback
 from . import (brain, chatgpt, contacts, followups, gmail_alerts, outreach, pick, pitch, registry, research,
                sender, store, telegram, youtube)
 from .config import BID_RESERVE, MAX_AI_PER_DAY, MAX_AI_PER_RUN, MIN_SCORE, RUN_EVERY_MINUTES, TELEGRAM_CHAT_ID
-from .filters import keep, prescore
+from .filters import is_contract, keep, prescore
 from . import settings, sources
 from .sources import collect, pick_sources
 
 _lock = threading.Lock()
+
+
+def job_status(lead: dict, niche_ok: bool, picky: set) -> str:
+    """Where a new lead goes. Every job is handled the Upwork-bot way (short card → you pick → AI writes):
+    full-time roles are dropped on arrival, and contract roles outside the niche are stored but never shown.
+    `flow: pick` sources (Freelancer) are already filtered by skill on the site, so they skip the niche check."""
+    if lead["kind"] == "prospect":  # YouTube channels wait for research (B5)
+        return "prospect_new"
+    if not is_contract(lead):
+        return "not_contract"
+    return "pick_new" if niche_ok or lead["source"] in picky else "off_niche"
 
 
 def gather(con, dry=False) -> list[dict]:
@@ -58,14 +69,10 @@ def gather(con, dry=False) -> list[dict]:
         seen_keys.add(lead["title_key"])
         ok, markets = keep(lead)
         lead["markets"] = markets
+        status = job_status(lead, ok, picky)
         if not dry:
-            # Pick-flow sources (Freelancer) always reach the phone as a pick card: the owner decides.
-            if lead["kind"] == "prospect":  # Phase 1 prospects wait for research (B5), not the old job AI
-                status = "prospect_new"
-            else:
-                status = "pick_new" if lead["source"] in picky else ("queued" if ok else "filtered")
             store.add(con, lead, markets, status, prescore=prescore(lead, ok, markets))
-        if ok or lead["source"] in picky or lead["kind"] == "prospect":
+        if status in ("pick_new", "prospect_new"):
             fresh.append(lead)
     print(f"collected {len(leads)} items, {len(fresh)} new + relevant by keywords")
     for e in errors:
@@ -77,7 +84,7 @@ def run_cycle() -> str:
     with _lock:
         con = store.db()
         gather(con)
-        store.requeue_pick(con, pick_sources())  # older Freelancer rows left in the AI queue
+        store.retire_old_queue(con, is_contract, pick_sources())  # leads from before the contract-only switch
         picked = pick.send_new_cards(con)
         try:  # B4: find an email / social route for new YouTube prospects (plain web pages, no AI)
             found = contacts.run(con)

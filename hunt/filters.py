@@ -58,3 +58,30 @@ def prescore(lead: dict, kept: bool, markets: list[str]) -> int:
     if lead.get("kind") == "funding" and SIGNAL.search(title):
         score += 5
     return max(0, min(100, score))
+
+
+# ---- Contract-only gate (2026-11-20): full-time roles are dropped on arrival, before any AI. ----
+# A site's own job-type label wins (Himalayas, Remotive, Jobicy, Lever, Ashby, RemoteOK tags).
+# Without a label, the post's words decide. "smart contract" (crypto) never counts as a contract job.
+TYPE_CONTRACT = re.compile(r"contract|freelanc|temporary|\btemp\b|fixed[- ]?term|project|gig|hourly", re.I)
+TEXT_CONTRACT = re.compile(
+    r"\bcontractors?\b|\bfreelanc(e|er|ers|ing)\b|\bcontract[- ]to[- ]hire\b|\bfixed[- ]term\b|\bproject[- ]based\b|"
+    r"\b1099\b|\bhourly rate\b|\bper hour\b|\b(on a |short[- ]term |long[- ]term |paid |part[- ]time |remote )?"
+    r"contract (role|position|basis|job|work|opportunity|engagement|gig|assignment)\b|\(contract\)|[-–|] contract\b",
+    re.I)
+SMART_CONTRACT = re.compile(r"\bsmart[- ]contracts?\b", re.I)
+FULL_TIME = re.compile(r"\bfull[- ]?time\b|\bpermanent\b", re.I)
+
+
+def is_contract(lead: dict) -> bool:
+    """Is this a contract / freelance job? Asks and `contract: always` sources are freelance by nature."""
+    if lead.get("kind") == "ask" or (lead.get("extra") or {}).get("contract_always"):
+        return True
+    job_type = str((lead.get("extra") or {}).get("job_type") or "").strip()
+    if job_type:
+        return bool(TYPE_CONTRACT.search(job_type))
+    title = lead.get("title") or ""
+    text = SMART_CONTRACT.sub(" ", f"{title} {lead.get('summary') or ''}")
+    if FULL_TIME.search(title):
+        return False
+    return bool(TEXT_CONTRACT.search(text))

@@ -70,6 +70,18 @@ def _get_json(url):
         return json.load(r)
 
 
+def _typed(lead: dict, job_type) -> dict:
+    """Keep the site's own job-type label (e.g. "Full Time", "Contract") for the contract-only gate."""
+    if isinstance(job_type, (list, tuple)):
+        job_type = " ".join(str(x) for x in job_type)
+    if job_type:
+        lead["extra"] = {**(lead.get("extra") or {}), "job_type": str(job_type)[:60]}
+    return lead
+
+
+REMOTEOK_TYPES = ("contract", "contractor", "freelance", "full time", "full-time", "part time", "part-time")
+
+
 def _json(name, url, kind, fmt=None, markets=None) -> list[dict]:
     data = _get_json(url)
     out = []
@@ -77,12 +89,13 @@ def _json(name, url, kind, fmt=None, markets=None) -> list[dict]:
     if name_fmt == "remoteok":
         for d in data:
             if isinstance(d, dict) and d.get("position"):
-                out.append(_lead(name, kind, d["position"], d.get("url", ""), d.get("description", ""),
-                                 d.get("company", ""), d.get("date", "")))
+                tags = [str(x).lower() for x in d.get("tags") or [] if str(x).lower() in REMOTEOK_TYPES]
+                out.append(_typed(_lead(name, kind, d["position"], d.get("url", ""), d.get("description", ""),
+                                        d.get("company", ""), d.get("date", "")), tags))
     elif name_fmt == "remotive":
         for d in data.get("jobs", []):
-            out.append(_lead(name, kind, d["title"], d["url"], d.get("description", ""),
-                             d.get("company_name", ""), d.get("publication_date", "")))
+            out.append(_typed(_lead(name, kind, d["title"], d["url"], d.get("description", ""),
+                                    d.get("company_name", ""), d.get("publication_date", "")), d.get("job_type")))
     elif name_fmt == "freelancer":  # Freelancer.com public projects API (filtered by skill IDs in the URL)
         for d in (data.get("result") or {}).get("projects", []):
             budget = d.get("budget") or {}
@@ -103,17 +116,17 @@ def _json(name, url, kind, fmt=None, markets=None) -> list[dict]:
                              (d.get("employer") or {}).get("name", ""), d.get("created", "")))
     elif name_fmt == "jobicy":
         for d in data.get("jobs", []):
-            out.append(_lead(name, kind, d["jobTitle"], d["url"], d.get("jobExcerpt") or d.get("jobDescription", ""),
-                             d.get("companyName", ""), d.get("pubDate", "")))
+            out.append(_typed(_lead(name, kind, d["jobTitle"], d["url"], d.get("jobExcerpt") or d.get("jobDescription", ""),
+                                    d.get("companyName", ""), d.get("pubDate", "")), d.get("jobType")))
     elif name_fmt == "workingnomads":
         for d in data:
             out.append(_lead(name, kind, d["title"], d["url"], d.get("description", ""), d.get("company_name", ""),
                              d.get("pub_date", "")))
     elif name_fmt == "himalayas":
         for d in data.get("jobs", []):
-            out.append(_lead(name, kind, d["title"], d.get("applicationLink") or d.get("guid", ""),
-                             d.get("excerpt") or d.get("description", ""), d.get("companyName", ""),
-                             d.get("pubDate", "")))
+            out.append(_typed(_lead(name, kind, d["title"], d.get("applicationLink") or d.get("guid", ""),
+                                    d.get("excerpt") or d.get("description", ""), d.get("companyName", ""),
+                                    d.get("pubDate", "")), d.get("employmentType")))
     if markets:
         for lead in out:
             lead["market_hint"] = list(markets)
@@ -134,21 +147,23 @@ def _careers(name, ats, slug, company, markets, remote_only=True) -> list[dict]:
     if ats == "greenhouse":
         for d in data.get("jobs", []):
             rows.append((d["title"], d.get("absolute_url", ""), (d.get("location") or {}).get("name", ""),
-                         d.get("updated_at", "")))
+                         d.get("updated_at", ""), ""))
     elif ats == "lever":
         for d in data:
             cat = d.get("categories") or {}
             rows.append((d.get("text", ""), d.get("hostedUrl", ""),
-                         f"{cat.get('location', '')} {d.get('workplaceType', '')}", d.get("createdAt", "")))
+                         f"{cat.get('location', '')} {d.get('workplaceType', '')}", d.get("createdAt", ""),
+                         cat.get("commitment", "")))
     elif ats == "ashby":
         for d in data.get("jobs", []):
             loc = f"{d.get('location', '')} {d.get('workplaceType', '')} {'remote' if d.get('isRemote') else ''}"
-            rows.append((d["title"], d.get("jobUrl", ""), loc, d.get("publishedAt", "")))
+            rows.append((d["title"], d.get("jobUrl", ""), loc, d.get("publishedAt", ""), d.get("employmentType", "")))
     out = []
-    for title, url, loc, published in rows:
+    for title, url, loc, published, job_type in rows:
         if remote_only and "remote" not in loc.lower():
             continue
-        lead = _lead(name, "job", title, url, f"{company} careers page. Location: {loc}", company, published)
+        lead = _typed(_lead(name, "job", title, url, f"{company} careers page. Location: {loc}", company, published),
+                      job_type)
         lead["market_hint"] = list(markets)
         out.append(lead)
     return out
@@ -177,6 +192,7 @@ def collect(stats: dict | None = None, cfg: dict | None = None) -> tuple[list[di
     on = lambda name, item: (bool(over[name].get("enabled")) if isinstance(over.get(name), dict) and  # noqa: E731
                              "enabled" in over[name] else item.get("enabled", True) is not False)
     leads, errors = [], []
+    always = {s["name"] for group in ("rss", "json") for s in cfg.get(group, []) or [] if s.get("contract") == "always"}
     jobs = [("news:" + n.get("region", "US"), _rss, (_gnews_url(n["q"], n.get("region", "US")), "funding"))
             for n in cfg.get("news", []) if on("news:" + n.get("region", "US"), n)]
     jobs += [(s["name"], _rss, (s["url"], s["kind"], s.get("title_must_include"))) for s in cfg.get("rss", []) if on(s["name"], s)]
@@ -190,6 +206,9 @@ def collect(stats: dict | None = None, cfg: dict | None = None) -> tuple[list[di
         row = stats.setdefault(name, {"count": 0, "error": None}) if stats is not None else {}
         try:
             got = [l for l in fn(name, *args) if l["url"]]
+            if name in always:
+                for l in got:
+                    l["extra"] = {**(l.get("extra") or {}), "contract_always": True}
             leads += got
             if stats is not None:
                 row["count"] += len(got)

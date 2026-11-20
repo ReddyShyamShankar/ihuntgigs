@@ -176,7 +176,8 @@ BID_SCHEMA = {
     "additionalProperties": False,
 }
 
-BID_RULES = f"""Write a bid for this freelance project on Freelancer.com. The bid amount is set separately.
+BID_RULES = f"""Write a short application for this freelance / contract job (a bid on a gig site, or the cover
+note in the company's application form). The price is set separately.
 Hard rules (a checker rejects the bid if any is broken):
 - {60}-{180} words, plain text, short paragraphs of at most 3 sentences, sentences under 25 words.
 - First line: one specific observation about THEIR project (a risk, a detail, what it needs). Never open by

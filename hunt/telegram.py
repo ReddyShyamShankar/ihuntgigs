@@ -35,13 +35,13 @@ LABEL = {"approved": "🚀 QUEUED FOR AUTO-APPLY", "applying": "⏳ APPLYING…"
 
 # Pick flow (Upwork-bot style): which buttons each status shows.
 PICK_ROWS = {
-    "pick": [[("✍️ Write bid", "write"), ("⏰ Later", "later"), ("⏭ Skip", "skipped")]],
+    "pick": [[("✍️ Write it", "write"), ("⏰ Later", "later"), ("⏭ Skip", "skipped")]],
     "drafted": [[("✅ Approve", "bidok"), ("🔁 Redo", "redo"), ("⏭ Skip", "skipped")]],
     "draft_failed": [[("🔁 Try again", "redo"), ("⏭ Skip", "skipped")]],
     "to_write": [[(f"• {LABEL['to_write']} •", "noop")]],
-    "later": [[(f"• {LABEL['later']} •", "noop")], [("✍️ Write bid", "write"), ("⏭ Skip", "skipped")]],
+    "later": [[(f"• {LABEL['later']} •", "noop")], [("✍️ Write it", "write"), ("⏭ Skip", "skipped")]],
     "bid_approved": [[(f"• {LABEL['bid_approved']} •", "noop")],
-                     [("✅ I bid myself", "sent"), ("⏭ Skip", "skipped")]],
+                     [("✅ I applied", "sent"), ("⏭ Skip", "skipped")]],
 }
 
 
@@ -150,6 +150,9 @@ def pick_card_text(lead: dict) -> str:
         if x.get("bid_count") is not None:
             money += f" · {x['bid_count']} bids so far"
         money += "\n"
+    if x.get("job_type"):
+        money += f"📄 {e(str(x['job_type']))}"
+        money += f" · {e(lead['company'])}\n" if lead.get("company") else "\n"
     summary = lead.get("summary", "")
     if summary.startswith("Budget "):
         summary = summary.split(". ", 1)[-1]
