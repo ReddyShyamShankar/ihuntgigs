@@ -84,6 +84,11 @@ def load_profile() -> dict:
     return p
 
 
+# Boxes where the owner's profile beats anything a form's CV reader pre-filled (old phone, old email, …).
+PROFILE_WINS = re.compile(r"\b(first|last|full|given|family|sur)?[\s_-]*name\b|e-?mail|phone|mobile|"
+                          r"current (company|employer)|current (title|role|position)|job title", re.I)
+
+
 def owner_answers(p: dict) -> list[tuple[re.Pattern, list[str]]]:
     """profile.yaml `answers:` → [(question pattern, acceptable answers in order of preference)].
     Only these questions are ever answered on tick-one questions; anything else goes to the owner."""
@@ -134,7 +139,10 @@ def field_rules(p: dict, cover: str) -> list[tuple[re.Pattern, str]]:
         (R(r"(years of (professional |work |total |relevant |overall )?experience|how many years)"
            r"(?![^|]*\b(with|in|using|on|as|managing|leading|of (?!(professional|work|total|overall) )\w))"),
          str(p.get("years_experience", ""))),
-        (R(r"salary|compensation|hourly rate|expected pay"), str(p.get("rate", ""))),
+        # An hourly-rate box gets the owner's rate; any other pay question (monthly/yearly salary, other
+        # currency) is left blank so it goes to the owner instead of a wrong "35 USD/hour".
+        (R(r"hourly rate|rate per hour|per hour"), str(p.get("rate", ""))),
+        (R(r"salary|compensation|expected pay|pay expectation|remuneration|\brate\b"), ""),
         (R(r"notice period|start date|when can you start|availability"), p.get("availability", "")),
         (R(r"how did you hear|referr"), p.get("heard_from", "")),
         (R(r"cover letter|additional info|anything else|why (do you|are you)|tell us|motivation|message|introduc"), cover),
@@ -217,11 +225,17 @@ def fill_form(page, p: dict, cover: str) -> dict:
             if kind in ("hidden", "submit", "button", "checkbox", "radio", "search", "file") or not el.is_visible():
                 continue
             desc = _describe(el)
-            required = el.get_attribute("required") is not None or el.get_attribute("aria-required") == "true" or "*" in desc
-            if (el.input_value() or "").strip():
-                filled.append(desc.split(" | ")[0][:40] + " (prefilled)")
-                continue
+            required = (el.get_attribute("required") is not None or el.get_attribute("aria-required") == "true"
+                        or "*" in desc or "✱" in desc)
             value = next((v for rx, v in rules if rx.search(desc)), "")
+            current = (el.input_value() or "").strip()
+            if current:
+                # The form (or its CV reader) filled this already. For who-you-are boxes the owner's
+                # profile wins over what was read from the CV; everything else is left as it is.
+                if not (value and PROFILE_WINS.search(desc) and current != str(value)):
+                    filled.append(desc.split(" | ")[0][:40] + " (prefilled)")
+                    continue
+                el.fill("")
             if value:
                 el.fill(str(value))
                 listbox = el.get_attribute("role") == "combobox" or el.get_attribute("aria-autocomplete")
