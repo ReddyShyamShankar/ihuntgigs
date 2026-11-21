@@ -9,6 +9,7 @@ import urllib.request
 import feedparser
 import yaml
 
+from .filters import countries_in_text
 from .config import DATA
 
 UA = "Mozilla/5.0 (compatible; HuntBot/0.1)"
@@ -129,6 +130,9 @@ def _json(name, url, kind, fmt=None, markets=None) -> list[dict]:
                                 d.get("pubDate", "")), d.get("employmentType"))
             if d.get("companySlug"):  # helps the server robot find the company's own job page (hunt/robot.py)
                 lead["extra"] = {**(lead.get("extra") or {}), "company_slug": str(d["companySlug"])[:80]}
+            written = countries_in_text(d.get("description", ""))  # e.g. "must reside in the United States"
+            if written and not d.get("locationRestrictions"):
+                d["locationRestrictions"] = written
             if d.get("locationRestrictions"):  # e.g. ["United States"]: only people there may apply
                 lead["extra"] = {**(lead.get("extra") or {}), "countries": list(d["locationRestrictions"])[:60]}
             out.append(lead)

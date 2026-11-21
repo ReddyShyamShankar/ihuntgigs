@@ -8,6 +8,7 @@ github: ""
 website: https://alex.example.com
 twitter: ""
 location: Remote
+country: ""              # where you live, as written in forms, e.g. Portugal
 current_company: Freelance
 current_title: Fintech writer & designer
 years_experience: 8

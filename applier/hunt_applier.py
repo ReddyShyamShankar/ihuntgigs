@@ -97,7 +97,8 @@ def field_rules(p: dict, cover: str) -> list[tuple[re.Pattern, str]]:
         (R(r"github"), p.get("github", "")),
         (R(r"portfolio|website|personal (site|url)|\burls?\b|link to"), p.get("website", "")),
         (R(r"twitter|\bx handle"), p.get("twitter", "")),
-        (R(r"\blocation\b|\bcity\b|where are you (based|located)|country of residence|current country"), p.get("location", "")),
+        (R(r"^\s*country\b|country of residence|current country|country you (live|reside)"), p.get("country", "")),
+        (R(r"\blocation\b|\bcity\b|where are you (based|located)"), p.get("location", "")),
         (R(r"current (company|employer)|organi[sz]ation"), p.get("current_company", "")),
         (R(r"current (title|role|position)|job title"), p.get("current_title", "")),
         # Only total experience; "years with Rust / managing a team" is skill-specific → left for the owner.
@@ -152,6 +153,16 @@ def fill_form(page, p: dict, cover: str) -> dict:
             missing.append(f"CV upload ({str(ex)[:50]})")
     elif files:
         missing.append("CV upload (set resume: in profile.yaml)")
+    # 1b) Cover letter hidden behind a button (Greenhouse: "Enter manually") → open the text box first.
+    if cover:
+        for btn in page.query_selector_all("button:has-text('Enter manually'), a:has-text('Enter manually')"):
+            try:
+                if btn.is_visible() and re.search(r"cover", _describe(btn) + (btn.evaluate(
+                        "b => (b.closest('fieldset, .field, [class*=field], [class*=upload]') || b.parentElement).innerText") or ""), re.I):
+                    btn.click()
+                    page.wait_for_timeout(800)
+            except Exception:  # noqa: BLE001
+                pass
     # 2) Text boxes. The FIRST rule that matches decides; if that answer is blank we leave the
     #    box empty rather than guessing (e.g. no GitHub link → don't put the website there).
     for el in page.query_selector_all("input, textarea"):
@@ -167,6 +178,9 @@ def fill_form(page, p: dict, cover: str) -> dict:
             value = next((v for rx, v in rules if rx.search(desc)), "")
             if value:
                 el.fill(str(value))
+                if el.get_attribute("role") == "combobox" or el.get_attribute("aria-autocomplete"):
+                    page.wait_for_timeout(900)  # pick-from-list box (e.g. Country): choose the matching option
+                    el.press("Enter")
                 filled.append(desc.split(" | ")[0][:40] or kind)
             elif required:
                 missing.append(desc or kind)

@@ -73,10 +73,37 @@ SMART_CONTRACT = re.compile(r"\bsmart[- ]contracts?\b", re.I)
 FULL_TIME = re.compile(r"\bfull[- ]?time\b|\bpermanent\b", re.I)
 
 
+_ALIAS = {"us": "united states", "usa": "united states", "u.s.": "united states", "u.s.a.": "united states",
+          "america": "united states", "uk": "united kingdom", "u.k.": "united kingdom", "uae": "united arab emirates"}
+_PLACE = r"(?i:the\s+)?([A-Z][\w.]*(?:[ -][A-Z][\w.]*){0,3})"
+_LIMIT = [re.compile(r, re.I if i else 0) for i, r in enumerate((
+    r"(?i:must|need to|needs to|required to|should|have to)\s+(?i:be\s+)?(?i:currently\s+)?"
+    r"(?i:reside|residing|live|living|located|based)\s+(?i:in|within)\s+" + _PLACE,
+    r"(?:only|exclusively)\s+(?:open\s+)?(?:to\s+)?(?:candidates|applicants|residents|people)\s+(?:in|from|of|based in)\s+"
+    r"(?:the\s+)?([a-z][\w.]*(?:[ -][a-z][\w.]*){0,3})",
+    r"\b(us|usa|u\.s\.|uk|u\.k\.)[- ](?:only|based only|residents only)\b",
+))]
+
+
+def countries_in_text(text: str) -> list[str]:
+    """Country limits written in the job text, e.g. "candidates must reside in the United States"."""
+    out = []
+    for rx in _LIMIT:
+        for m in rx.finditer(text or ""):
+            place = m.group(1).strip(" .").lower()
+            place = _ALIAS.get(place, place)
+            if place and not re.search(r"\b(any|world|global|remote|time ?zone|europe|emea|apac|latam)", place):
+                out.append(place)
+    return list(dict.fromkeys(out))
+
+
 def wrong_country(lead: dict, allowed: set) -> bool:
-    """The job names the countries it hires from, and none is one the owner can work from."""
-    only = (lead.get("extra") or {}).get("countries") or []
-    return bool(allowed and only and not {c.lower() for c in only} & allowed)
+    """The job limits who may apply (site tag or job text) and none of the owner's countries is allowed."""
+    if not allowed:
+        return False
+    only = [c.lower() for c in (lead.get("extra") or {}).get("countries") or []]
+    only += countries_in_text(f"{lead.get('title', '')}\n{lead.get('summary', '')}")
+    return bool(only) and not any(a in c or c in a for c in only for a in allowed)
 
 
 def blocked(title: str) -> bool:
