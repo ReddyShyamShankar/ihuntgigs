@@ -124,9 +124,14 @@ def _json(name, url, kind, fmt=None, markets=None) -> list[dict]:
                              d.get("pub_date", "")))
     elif name_fmt == "himalayas":
         for d in data.get("jobs", []):
-            out.append(_typed(_lead(name, kind, d["title"], d.get("applicationLink") or d.get("guid", ""),
-                                    d.get("excerpt") or d.get("description", ""), d.get("companyName", ""),
-                                    d.get("pubDate", "")), d.get("employmentType")))
+            lead = _typed(_lead(name, kind, d["title"], d.get("applicationLink") or d.get("guid", ""),
+                                d.get("excerpt") or d.get("description", ""), d.get("companyName", ""),
+                                d.get("pubDate", "")), d.get("employmentType"))
+            if d.get("companySlug"):  # helps the server robot find the company's own job page (hunt/robot.py)
+                lead["extra"] = {**(lead.get("extra") or {}), "company_slug": str(d["companySlug"])[:80]}
+            if d.get("locationRestrictions"):  # e.g. ["United States"]: only people there may apply
+                lead["extra"] = {**(lead.get("extra") or {}), "countries": list(d["locationRestrictions"])[:60]}
+            out.append(lead)
     if markets:
         for lead in out:
             lead["market_hint"] = list(markets)
@@ -192,6 +197,7 @@ def collect(stats: dict | None = None, cfg: dict | None = None) -> tuple[list[di
     on = lambda name, item: (bool(over[name].get("enabled")) if isinstance(over.get(name), dict) and  # noqa: E731
                              "enabled" in over[name] else item.get("enabled", True) is not False)
     leads, errors = [], []
+    searches = {s["name"] for s in cfg.get("json", []) or [] if "/search?q=" in s.get("url", "")}
     always = {s["name"] for group in ("rss", "json") for s in cfg.get(group, []) or [] if s.get("contract") == "always"}
     jobs = [("news:" + n.get("region", "US"), _rss, (_gnews_url(n["q"], n.get("region", "US")), "funding"))
             for n in cfg.get("news", []) if on("news:" + n.get("region", "US"), n)]
@@ -209,6 +215,9 @@ def collect(stats: dict | None = None, cfg: dict | None = None) -> tuple[list[di
             if name in always:
                 for l in got:
                     l["extra"] = {**(l.get("extra") or {}), "contract_always": True}
+            if name in searches:  # the owner's own search words found it: trusted as in the niche
+                for l in got:
+                    l["extra"] = {**(l.get("extra") or {}), "from_search": True}
             leads += got
             if stats is not None:
                 row["count"] += len(got)

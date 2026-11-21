@@ -73,6 +73,18 @@ SMART_CONTRACT = re.compile(r"\bsmart[- ]contracts?\b", re.I)
 FULL_TIME = re.compile(r"\bfull[- ]?time\b|\bpermanent\b", re.I)
 
 
+def wrong_country(lead: dict, allowed: set) -> bool:
+    """The job names the countries it hires from, and none is one the owner can work from."""
+    only = (lead.get("extra") or {}).get("countries") or []
+    return bool(allowed and only and not {c.lower() for c in only} & allowed)
+
+
+def blocked(title: str) -> bool:
+    """Title names work the owner never does (JOB_EXCLUDE). Applies even to trusted searches."""
+    title = (title or "").lower()
+    return any(_has(title, w.strip()) for w in JOB_EXCLUDE)
+
+
 def is_contract(lead: dict) -> bool:
     """Is this a contract / freelance job? Asks and `contract: always` sources are freelance by nature."""
     if lead.get("kind") == "ask" or (lead.get("extra") or {}).get("contract_always"):

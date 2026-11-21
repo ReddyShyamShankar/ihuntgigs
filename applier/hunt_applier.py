@@ -298,7 +298,7 @@ def apply_one(ctx, lead: dict, p: dict, live: bool) -> tuple[str, str]:
     page = ctx.new_page()
     shot = RUNS / f"{time.strftime('%Y%m%d-%H%M%S')}-{re.sub(r'[^A-Za-z0-9]', '', lead['id'])[:12]}.png"
     try:
-        page, where = go_to_form(ctx, page, lead["url"])
+        page, where = go_to_form(ctx, page, lead.get("ats_url") or lead["url"])  # company's own form first
         if where == "login-wall":
             return "needs_you", (f"{host_of(page.url)} wants you signed in first — run the helper once with "
                                  "--setup and sign in, it remembers you")
@@ -310,7 +310,7 @@ def apply_one(ctx, lead: dict, p: dict, live: bool) -> tuple[str, str]:
             return "needs_you", "Applies by email — tap ✉️ Email draft, check it, press Send"
         if where == "no-form":
             return "needs_you", "Couldn't find an application form — open the link"
-        cover = (lead.get("email_body") or lead.get("dm") or "").strip()
+        cover = (lead.get("cover") or lead.get("email_body") or lead.get("dm") or "").strip()  # cover = locked note
         result = fill_form(page, p, cover)
         page.screenshot(path=str(shot), full_page=True)
         if has_captcha(page):

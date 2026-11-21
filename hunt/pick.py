@@ -9,7 +9,7 @@ and taps "✅ I applied". Since 2026-11-20 every contract job source uses this f
 import json
 import time
 
-from . import brain, chatgpt, policy, store, telegram
+from . import autoapply, brain, chatgpt, policy, store, telegram
 from .config import BID_RESERVE, MAX_AI_PER_DAY, TELEGRAM_CHAT_ID
 
 MAX_CARDS_PER_CYCLE = 15
@@ -22,9 +22,11 @@ TAPS = {
     "later": {"pick"},
     "redo": {"drafted", "draft_failed"},
     "bidok": {"drafted"},
+    "stop": {autoapply.WAIT, autoapply.READY, autoapply.MAC},
 }
 LOCKED = {"bid_approved", "sent", "replied", "won", "lost"}
-STATUSES = {"pick_new", "pick", "later", "to_write", "drafted", "draft_failed", "bid_approved"}
+STATUSES = {"pick_new", "pick", "later", "to_write", "drafted", "draft_failed", "bid_approved"} | autoapply.STATUSES
+EDITABLE = {"drafted", "draft_failed", autoapply.WAIT, autoapply.READY, autoapply.MAC}  # replies may change the text
 
 
 def owns(row, action: str = "") -> bool:
@@ -106,16 +108,17 @@ def write(con, row, instruction: str = "", current: str = "") -> dict:
     """Write (or rewrite) a bid until the checker accepts it or attempts run out. Returns the data saved."""
     lead = dict(row)
     d = _data(row)
+    style = "form" if autoapply.is_auto(row) else "bid"  # company forms: cover note, one own-portfolio link OK
     feedback: list[str] = []
     best = None
     for _ in range(1 + MAX_REDRAFTS):
         if not _ai_left(con):
             break
         store.ai_count_add(con, bid=True)
-        out = brain.write_bid(lead, feedback, instruction, current)
+        out = brain.write_bid(lead, feedback, instruction, current, style=style)
         if not out:
             continue
-        verdict = policy.assess(out["bid_text"], job_text=_job_text(row), owner_name=OWNER_NAME)
+        verdict = policy.assess(out["bid_text"], job_text=_job_text(row), owner_name=OWNER_NAME, style=style)
         attempt = {"bid": out["bid_text"].strip(), "days": out.get("days"), "proof_ids": out.get("proof_ids", []),
                    "policy": verdict.as_dict()}
         if best is None or verdict.accepted or verdict.score > best["policy"]["score"]:
@@ -133,35 +136,43 @@ def process_writes(con) -> int:
     """Called by the writer thread: write every bid the owner asked for."""
     done = 0
     for row in store.with_status(con, "to_write"):
+        auto = autoapply.is_auto(row)
+        if auto and not _ai_left(con):
+            continue  # automatic jobs wait for tomorrow's AI allowance instead of failing
         saved = _data(row)
+        where = row["tg_draft_id"] or row["tg_card_id"]
+        name = "" if where else f" ({row['title'][:80]})"  # automatic jobs have no card to reply to
         current = "" if saved.get("fresh") else saved.get("bid", "")  # 🔁 Redo = fresh text, old bid kept as backup
         try:
             d = write(con, row, instruction=saved.get("instruction", ""), current=current)
         except Exception as ex:  # noqa: BLE001 — any failure ends this request; the writer must not retry it forever
             paused = isinstance(ex, (chatgpt.UsageLimit, chatgpt.LoginNeeded, chatgpt.TryLater))
-            telegram.say(f"⏸ Can't write this bid right now: {str(ex)[:200]}. Tap 🔁 to try again"
-                         + (" later." if paused else "."), reply_to_message_id=row["tg_card_id"])
+            telegram.say(f"⏸ Can't write this bid{name} right now: {str(ex)[:200]}. Tap 🔁 to try again"
+                         + (" later." if paused else "."), reply_to_message_id=where)
             saved.pop("instruction", None)
             saved.pop("fresh", None)
-            store.update(con, row["id"], status="drafted" if saved.get("bid") else "draft_failed", data=saved)
+            kept = (autoapply.WAIT if auto else "drafted") if saved.get("bid") else "draft_failed"
+            store.update(con, row["id"], status=kept, data=saved)
             rebutton(con, row["id"])
             continue
         d.pop("instruction", None)
         d.pop("fresh", None)
         attempt = d.get("attempt")
         if attempt and attempt["policy"]["accepted"]:
-            _post_bid(con, row, d)
+            autoapply.queue(con, row, d) if auto else _post_bid(con, row, d)
         else:
             why = "; ".join((attempt or {}).get("policy", {}).get("blockers", [])[:6]) or \
                   ("today's bid AI allowance is used up" if not _ai_left(con) else "the AI gave no answer")
             if d.get("bid"):  # a rewrite failed: keep the last good bid, like the Upwork bot
-                telegram.say(f"⚠️ The rewrite didn't pass the checker ({why}). Your previous bid is unchanged.",
-                             reply_to_message_id=row["tg_draft_id"] or row["tg_card_id"])
-                store.update(con, row["id"], status="drafted", data=d)
+                telegram.say(f"⚠️ The rewrite didn't pass the checker ({why}). Your previous text is unchanged.",
+                             reply_to_message_id=where)
+                store.update(con, row["id"], status=autoapply.WAIT if auto else "drafted", data=d)
             else:
-                telegram.say(f"⚠️ No bid passed the checker after {1 + MAX_REDRAFTS} tries: {why}",
-                             reply_to_message_id=row["tg_card_id"])
-                store.update(con, row["id"], status="draft_failed", data=d)
+                m = telegram.say(f"⚠️ No bid{name} passed the checker after {1 + MAX_REDRAFTS} tries: {why}",
+                                 reply_to_message_id=where)
+                # An automatic job has no card yet: this message becomes its card (with 🔁 Try again / ⏭ Skip).
+                store.update(con, row["id"], status="draft_failed", data=d,
+                             **({} if where else {"tg_card_id": m["message_id"]}))
         rebutton(con, row["id"])
         done += 1
     return done
@@ -175,12 +186,14 @@ def tap(con, action: str, lead_id: str, message_id=None) -> str:
     status = row["status"]
     if action == "bidok" and message_id != row["tg_draft_id"]:
         return "That's an old version — approve the newest bid"
+    if action == "stop":
+        return autoapply.stop(con, row)
     if action == "skipped":
         if status in LOCKED:
             return "Already approved — use ✅ I applied or leave it"
         store.update(con, lead_id, status="skipped")
     elif action == "sent":
-        if status != "bid_approved":
+        if status not in ("bid_approved", autoapply.MAC, autoapply.READY, autoapply.WAIT):
             return "Approve the bid first"
         store.update(con, lead_id, status="sent")
     elif action not in TAPS or status not in TAPS[action]:
@@ -214,18 +227,19 @@ def reply(con, row, text: str) -> None:
     if row["status"] in LOCKED:
         telegram.say("🔒 This bid is approved and locked; it can't be changed.", reply_to_message_id=row["tg_draft_id"])
         return
-    if row["status"] not in ("drafted", "draft_failed"):
+    if row["status"] not in EDITABLE:
         return
+    auto = autoapply.is_auto(row)
     d = _data(row)
     if text[:5].upper() == "TEXT:":
         own = text[5:].strip()
-        verdict = policy.assess(own, job_text=_job_text(row), owner_name=OWNER_NAME)
+        verdict = policy.assess(own, job_text=_job_text(row), owner_name=OWNER_NAME, style="form" if auto else "bid")
         if not verdict.accepted:
             telegram.say("⚠️ Your text breaks: " + "; ".join(verdict.blockers[:6]) + ". Nothing changed.",
                          reply_to_message_id=row["tg_draft_id"])
             return
         d.update({"bid": own, "policy": verdict.as_dict()})
-        _post_bid(con, row, d)
+        autoapply.queue(con, row, d) if auto else _post_bid(con, row, d)
         rebutton(con, row["id"])
         return
     if not _ai_left(con):

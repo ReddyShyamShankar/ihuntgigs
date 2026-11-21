@@ -31,7 +31,9 @@ def call(method: str, *, http_timeout: int = 70, **params):  # params go to Tele
 
 LABEL = {"approved": "🚀 QUEUED FOR AUTO-APPLY", "applying": "⏳ APPLYING…", "applied": "✅ APPLIED",
          "needs_you": "👋 NEEDS YOU", "to_write": "✍️ WRITING…", "later": "⏰ LATER (/later brings it back)",
-         "bid_approved": "🔒 APPROVED — bid text locked"}
+         "bid_approved": "🔒 APPROVED — bid text locked", "apply_ready": "🤖 APPLYING SOON",
+         "applying_srv": "🤖 ROBOT APPLYING…", "mac_ready": "💻 WAITING FOR YOUR MAC", "stopped": "✋ STOPPED",
+         "replaced": "Replaced by a newer version below"}
 
 # Pick flow (Upwork-bot style): which buttons each status shows.
 PICK_ROWS = {
@@ -42,6 +44,13 @@ PICK_ROWS = {
     "later": [[(f"• {LABEL['later']} •", "noop")], [("✍️ Write it", "write"), ("⏭ Skip", "skipped")]],
     "bid_approved": [[(f"• {LABEL['bid_approved']} •", "noop")],
                      [("✅ I applied", "sent"), ("⏭ Skip", "skipped")]],
+    # Automatic sources (apply: auto): safety window, then the robots.
+    "send_wait": [[("✋ Stop", "stop")]],
+    "apply_ready": [[(f"• {LABEL['apply_ready']} •", "noop")], [("✋ Stop", "stop")]],
+    "applying_srv": [[(f"• {LABEL['applying_srv']} •", "noop")]],
+    "mac_ready": [[(f"• {LABEL['mac_ready']} •", "noop")], [("✋ Stop", "stop"), ("✅ I applied", "sent")]],
+    "stopped": [[(f"• {LABEL['stopped']} •", "noop")]],
+    "replaced": [[(f"• {LABEL['replaced']} •", "noop")]],
 }
 
 

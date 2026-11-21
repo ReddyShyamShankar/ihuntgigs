@@ -19,6 +19,7 @@ RULES_VERSION = "2026-11-16-v1"
 RULE_COUNT = 22
 PASS_PERCENT = 80.0
 MIN_WORDS, MAX_WORDS = 60, 200
+FORM_MIN, FORM_MAX = 120, 190  # company-form cover notes (approved 2026-11-21); sent with no human check, so hard
 
 HARD = (
     "empty bid",
@@ -132,7 +133,13 @@ def _client_required_ending(job: str) -> str | None:
     return m.group(1).strip()
 
 
-def validate(text: str, *, job_text: str = "", owner_name: str = "") -> list[str]:
+def _own_link(url: str) -> bool:
+    """A link to the owner's own work: its host appears in data/portfolio.yaml."""
+    host = re.sub(r"^https?://(www\.)?", "", url.lower()).split("/")[0]
+    return bool(host) and host in PORTFOLIO_TEXT.lower()
+
+
+def validate(text: str, *, job_text: str = "", owner_name: str = "", style: str = "bid") -> list[str]:
     """Return the list of broken rules. Empty means every rule passed."""
     text = (text or "").strip()
     if not text:
@@ -140,9 +147,10 @@ def validate(text: str, *, job_text: str = "", owner_name: str = "") -> list[str
     v: list[str] = []
     words = _words(text)
     client_max = _client_max_words(job_text)
-    if len(words) < MIN_WORDS and not (client_max and client_max < MIN_WORDS):
-        v.append(f"under {MIN_WORDS} words")
-    limit = client_max or MAX_WORDS
+    low, high = (FORM_MIN, FORM_MAX) if style == "form" else (MIN_WORDS, MAX_WORDS)
+    if len(words) < low and not (client_max and client_max < low):
+        v.append(f"under {low} words")
+    limit = client_max or high
     if len(words) > limit:
         v.append(f"over {limit} words")
     if _EMOJI_START.match(text):
@@ -169,8 +177,9 @@ def validate(text: str, *, job_text: str = "", owner_name: str = "") -> list[str
     unknown = sorted(_numbers(text) - _numbers(job_text + "\n" + PORTFOLIO_TEXT))
     if unknown:
         v.append("unverified number: " + ", ".join(unknown))
-    if _URL.search(text):
-        v.append("contains a link")
+    links = _URL.findall(text)
+    if links and not (style == "form" and len(links) == 1 and _own_link(links[0])):
+        v.append("contains a link")  # company forms: one link to the owner's own portfolio is fine
     if _CONTACT.search(text):
         v.append("contains contact details")
     if _OTHER_PLATFORM.search(text):
@@ -198,10 +207,11 @@ def validate(text: str, *, job_text: str = "", owner_name: str = "") -> list[str
     return v
 
 
-def assess(text: str, *, job_text: str = "", owner_name: str = "") -> Decision:
-    unique = tuple(dict.fromkeys(validate(text, job_text=job_text, owner_name=owner_name)))
+def assess(text: str, *, job_text: str = "", owner_name: str = "", style: str = "bid") -> Decision:
+    unique = tuple(dict.fromkeys(validate(text, job_text=job_text, owner_name=owner_name, style=style)))
     failed = min(len(unique), RULE_COUNT)
     score = round(100.0 * (RULE_COUNT - failed) / RULE_COUNT, 1)
-    hard = tuple(x for x in unique if x.startswith(HARD))
+    hard_rules = HARD + (("under ", "over ", "missing sign-off") if style == "form" else ())
+    hard = tuple(x for x in unique if x.startswith(hard_rules))
     accepted = score >= PASS_PERCENT and not hard
     return Decision(score, accepted, unique, () if accepted else (hard or unique))

@@ -12,6 +12,7 @@
   python -m hunt apply-queue [--peek] / apply-result ID STATUS [note] / apply-say TEXT   # used by applier/
 """
 import json
+import os
 import sys
 import threading
 import time
@@ -19,9 +20,9 @@ import traceback
 
 from . import (brain, chatgpt, contacts, followups, gmail_alerts, outreach, pick, pitch, registry, research,
                sender, store, telegram, youtube)
-from .config import BID_RESERVE, MAX_AI_PER_DAY, MAX_AI_PER_RUN, MIN_SCORE, RUN_EVERY_MINUTES, TELEGRAM_CHAT_ID
-from .filters import is_contract, keep, prescore
-from . import settings, sources
+from .config import COUNTRIES, BID_RESERVE, MAX_AI_PER_DAY, MAX_AI_PER_RUN, MIN_SCORE, RUN_EVERY_MINUTES, TELEGRAM_CHAT_ID
+from .filters import blocked, is_contract, keep, prescore, wrong_country
+from . import autoapply, settings, sources
 from .sources import collect, pick_sources
 
 _lock = threading.Lock()
@@ -35,7 +36,13 @@ def job_status(lead: dict, niche_ok: bool, picky: set) -> str:
         return "prospect_new"
     if not is_contract(lead):
         return "not_contract"
-    return "pick_new" if niche_ok or lead["source"] in picky else "off_niche"
+    if blocked(lead.get("title", "")):
+        return "off_niche"
+    if wrong_country(lead, COUNTRIES):
+        return "wrong_country"
+    # A job found by one of the owner's own searches (e.g. "financial writer") is in the niche by definition.
+    trusted = (lead.get("extra") or {}).get("from_search")
+    return "pick_new" if niche_ok or trusted or lead["source"] in picky else "off_niche"
 
 
 def gather(con, dry=False) -> list[dict]:
@@ -63,6 +70,7 @@ def gather(con, dry=False) -> list[dict]:
             store.source_ran(con, name, st["count"], st["error"])
     fresh, seen_keys = [], set()
     picky = pick_sources()
+    autos = autoapply.auto_sources()
     for lead in leads:
         if lead["title_key"] in seen_keys or not store.is_new(con, lead):
             continue
@@ -70,9 +78,11 @@ def gather(con, dry=False) -> list[dict]:
         ok, markets = keep(lead)
         lead["markets"] = markets
         status = job_status(lead, ok, picky)
+        if status == "pick_new" and lead["source"] in autos:
+            status = "to_write"  # automatic source: no card, the writer starts at once (decision #29)
         if not dry:
             store.add(con, lead, markets, status, prescore=prescore(lead, ok, markets))
-        if status in ("pick_new", "prospect_new"):
+        if status in ("pick_new", "to_write", "prospect_new"):
             fresh.append(lead)
     print(f"collected {len(leads)} items, {len(fresh)} new + relevant by keywords")
     for e in errors:
@@ -262,7 +272,8 @@ def apply_payload(row: dict) -> dict:
             "title": row["title"], "company": d.get("company") or row["company"],
             "emails": telegram.lead_emails(row),
             "email_subject": d.get("email_subject", ""), "email_body": d.get("email_body", ""),
-            "dm": d.get("dm", "")}
+            "dm": d.get("dm", ""), "cover": d.get("locked_bid", ""),
+            "ats_url": d.get("ats_url", "")}  # the company's own form, if the server robot found it
 
 
 def handle_update(con, u) -> None:
@@ -375,6 +386,7 @@ def bot() -> None:
             try:
                 con3 = con3 or store.db()  # opened inside the retry loop: a busy database can't kill this thread
                 pick.process_writes(con3)
+                autoapply.release_due(con3)  # safety window over → the robots may apply
             except Exception:  # noqa: BLE001
                 traceback.print_exc()
             time.sleep(10)
@@ -420,7 +432,7 @@ def main() -> None:
         con = store.db()
         # Only one helper runs at a time, so anything still "applying" is left over from a run that
         # stopped part-way: offer it again (the helper skips URLs it already submitted).
-        rows = store.with_status(con, ("approved", "applying"))
+        rows = store.with_status(con, ("approved", "applying", autoapply.MAC))
         if "--peek" not in sys.argv:
             for r in rows:
                 if r["status"] != "applying":
@@ -441,6 +453,11 @@ def main() -> None:
         rebutton(con, lead_id)
         if status != "applied" and note and telegram.enabled():
             telegram.say(f"👋 Needs you — {row['title'][:80]}\n{note}", reply_to_message_id=row["tg_card_id"])
+    elif cmd == "robot":  # route 1: apply on the company's own form (systemd hunt-robot.timer)
+        from . import robot
+        if not os.environ.get("HUNT_APPLIER_PROFILE"):
+            raise SystemExit("HUNT_APPLIER_PROFILE is not set; robot off (jobs go to the Mac helper)")
+        print(robot.run())
     elif cmd == "apply-say":  # the Mac helper's end-of-batch summary
         telegram.say(" ".join(sys.argv[2:])[:3500])
     elif cmd == "digest":

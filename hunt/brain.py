@@ -195,9 +195,30 @@ Hard rules (a checker rejects the bid if any is broken):
 """
 
 
-def write_bid(lead: dict, feedback: list[str] | None = None, instruction: str = "", current: str = "") -> dict | None:
-    """Freelancer-style bid. `feedback` = rules the last attempt broke; `instruction` = owner's words."""
-    parts = [BID_RULES, _lead_block(lead)]
+FORM_RULES = f"""Write the cover note for this contract job. It goes into the company's own application form
+(the CV is attached separately). The price is set separately.
+Hard rules (a checker rejects the note if any is broken):
+- 120-190 words, plain text, short paragraphs of at most 3 sentences, sentences under 25 words.
+- First line: one specific observation about THEIR job or product. Never open by restating the job.
+- Cite 1-2 proofs from the portfolio library by fact. Every number you write must appear exactly in the
+  portfolio or in the job text. No other numbers.
+- You may add ONE link, and only to {NAME}'s own portfolio site as written in the portfolio library.
+  No email addresses, no phone numbers, no messaging apps. Never name Upwork or any other platform.
+- No price, rate or currency amount. No free samples, trials or "unlimited revisions".
+- First person singular ("I"), never "we/our/us", never "my team/agency".
+- No long dashes (— or –). No filler words: passionate, seamless, robust, cutting-edge, high-quality, delve.
+- The line before the sign-off must be one concrete question or next step about their work, using
+  words from their post. Not "Let me know" or "Looking forward to hearing from you".
+- If the job text gives an instruction for the application (a code word, a word limit), follow it.
+- Last line: just "{NAME}".
+"""
+
+
+def write_bid(lead: dict, feedback: list[str] | None = None, instruction: str = "", current: str = "",
+              style: str = "bid") -> dict | None:
+    """Bid (gig sites) or cover note (style="form", company forms). `feedback` = rules the last attempt broke;
+    `instruction` = owner's words."""
+    parts = [FORM_RULES if style == "form" else BID_RULES, _lead_block(lead)]
     if current:
         parts.append(f"Current bid:\n{current}")
     if instruction:

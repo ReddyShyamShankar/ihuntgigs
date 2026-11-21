@@ -19,33 +19,33 @@ rss:
 json:
   - {name: remoteok, url: 'https://remoteok.com/api', kind: job}
   - {name: remotive, url: 'https://remotive.com/api/remote-jobs?limit=200', kind: job}
-  - {name: himalayas, url: 'https://himalayas.app/jobs/api?limit=100', kind: job}
-  # Gig marketplaces. `flow: pick` = Upwork-bot flow: you pick on Telegram, then the AI writes and a checker reviews it
-  # Freelancer.com by skill: Algorithmic Trading, Cryptocurrency, Financial Markets, Forex, MetaTrader, Pine Script, Trading, Blockchain
-  - {name: freelancer, format: freelancer, kind: ask, flow: pick, contract: always, markets: [forex, crypto, us_stocks], url: 'https://www.freelancer.com/api/projects/0.1/projects/active/?jobs%5B%5D=3520&jobs%5B%5D=2658&jobs%5B%5D=227&jobs%5B%5D=3522&jobs%5B%5D=148&jobs%5B%5D=1384&jobs%5B%5D=1668&jobs%5B%5D=989&limit=50&compact=true&sort_field=time_updated&full_description=true'}
+  # apply: auto = no ✍️ tap: AI writes at once, 2 h safety window with ✋ Stop, then the robots apply (hunt/autoapply.py)
+  - {name: himalayas, url: 'https://himalayas.app/jobs/api?limit=100', kind: job, apply: auto}
+  # Gig marketplaces (contract by nature). Every kept job uses the pick flow: card → ✍️ → AI writes → checker → you approve.
+  # Freelancer.com removed 2026-11-21: free plan is ~6 bids/month, owner won't pay for bids.
   - {name: braintrust, format: braintrust, kind: job, contract: always, url: 'https://app.usebraintrust.com/api/jobs/?page_size=50'}
   - {name: jobicy_copywriting, format: jobicy, kind: job, url: 'https://jobicy.com/api/v2/remote-jobs?count=50&industry=copywriting'}
   - {name: jobicy_finance, format: jobicy, kind: job, url: 'https://jobicy.com/api/v2/remote-jobs?count=50&industry=accounting-finance'}
   - {name: jobicy_design, format: jobicy, kind: job, url: 'https://jobicy.com/api/v2/remote-jobs?count=50&industry=design-multimedia'}
   - {name: workingnomads, format: workingnomads, kind: job, url: 'https://www.workingnomads.com/api/exposed_jobs/'}
   # Searches on general boards for forex / stocks / trading roles (not just crypto)
-  - {name: himalayas_forex, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=forex', kind: job}
-  - {name: himalayas_trading, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=trading', kind: job}
-  - {name: himalayas_stocks, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=stock%20market', kind: job}
-  - {name: himalayas_fintech, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=fintech', kind: job}
+  - {name: himalayas_forex, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=forex', kind: job, apply: auto}
+  - {name: himalayas_trading, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=trading', kind: job, apply: auto}
+  - {name: himalayas_stocks, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=stock%20market', kind: job, apply: auto}
+  - {name: himalayas_fintech, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=fintech', kind: job, apply: auto}
   # The owner's 12 core searches (same as the LinkedIn alerts), on Himalayas (Remotive ignores search words, so only its main feed is read)
-  - {name: himalayas_crypto_content_writer, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=crypto%20content%20writer', kind: job}
-  - {name: himalayas_financial_writer, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=financial%20writer', kind: job}
-  - {name: himalayas_crypto_community_manager, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=crypto%20community%20manager', kind: job}
-  - {name: himalayas_trading_mentor, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=trading%20mentor', kind: job}
-  - {name: himalayas_market_analyst, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=market%20analyst', kind: job}
-  - {name: himalayas_trading_signals, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=trading%20signals', kind: job}
-  - {name: himalayas_fintech_designer, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=fintech%20designer', kind: job}
-  - {name: himalayas_pine_script, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=pine%20script', kind: job}
-  - {name: himalayas_trading_bot, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=trading%20bot', kind: job}
-  - {name: himalayas_telegram_bot, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=telegram%20bot', kind: job}
-  - {name: himalayas_ai_video, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=ai%20video', kind: job}
-  - {name: himalayas_forex_business_development, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=forex%20business%20development', kind: job}
+  - {name: himalayas_crypto_content_writer, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=crypto%20content%20writer', kind: job, apply: auto}
+  - {name: himalayas_financial_writer, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=financial%20writer', kind: job, apply: auto}
+  - {name: himalayas_crypto_community_manager, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=crypto%20community%20manager', kind: job, apply: auto}
+  - {name: himalayas_trading_mentor, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=trading%20mentor', kind: job, apply: auto}
+  - {name: himalayas_market_analyst, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=market%20analyst', kind: job, apply: auto}
+  - {name: himalayas_trading_signals, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=trading%20signals', kind: job, apply: auto}
+  - {name: himalayas_fintech_designer, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=fintech%20designer', kind: job, apply: auto}
+  - {name: himalayas_pine_script, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=pine%20script', kind: job, apply: auto}
+  - {name: himalayas_trading_bot, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=trading%20bot', kind: job, apply: auto}
+  - {name: himalayas_telegram_bot, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=telegram%20bot', kind: job, apply: auto}
+  - {name: himalayas_ai_video, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=ai%20video', kind: job, apply: auto}
+  - {name: himalayas_forex_business_development, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=forex%20business%20development', kind: job, apply: auto}
 
 # Trading / investing companies' own job pages (official public feeds; remote jobs only).
 # These are the same form types the auto-apply helper fills (Greenhouse, Lever, Ashby).

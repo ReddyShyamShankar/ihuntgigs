@@ -11,6 +11,7 @@ SSH="ssh -i $KEY -o BatchMode=yes"
 rsync -az --delete --no-owner --no-group -e "$SSH" \
   --exclude '/deploy/target.env' --exclude '__pycache__' --exclude '*.pyc' \
   --include '/hunt/***' --include '/deploy/***' --include '/requirements.txt' \
+  --include '/applier/' --include '/applier/hunt_applier.py' \
   --include '/data/' --include '/data/sources.yaml' --include '/data/portfolio.yaml' \
   --exclude '*' \
   ./ "$HOST:/opt/hunt/"
@@ -25,11 +26,19 @@ $SSH "$HOST" 'set -e
   chown -R root:root /opt/hunt && chmod 755 /opt/hunt
   chown hunt:hunt data && chmod 700 data
   find data -maxdepth 1 -type f ! -name "*.yaml" -exec chown hunt:hunt {} + -exec chmod 600 {} +
+  # Server robot (route 1): a hidden browser in its own capped service. Browser files live in /opt/hunt/browsers.
+  .venv/bin/pip install -q "playwright>=1.65,<2"
+  [ -d browsers ] || PLAYWRIGHT_BROWSERS_PATH=/opt/hunt/browsers .venv/bin/python -m playwright install --with-deps chromium >/dev/null
+  chmod -R a+rX browsers
+  install -d -o hunt -g hunt -m 700 data/robot-home data/robot-runs data/private
   chmod 644 data/*.yaml
   cp deploy/hunt.service /etc/systemd/system/hunt.service
   cp deploy/hunt-dash.service /etc/systemd/system/hunt-dash.service   # dashboard: 127.0.0.1 only
+  cp deploy/hunt-robot.service deploy/hunt-robot.timer /etc/systemd/system/
   systemctl daemon-reload
   systemctl enable hunt hunt-dash >/dev/null 2>&1 || true
+  if [ -f data/private/profile.yaml ]; then systemctl enable --now hunt-robot.timer >/dev/null 2>&1; echo "robot timer: $(systemctl is-active hunt-robot.timer)"
+  else echo "Robot off: no data/private/profile.yaml yet (jobs go to the Mac helper)."; fi
   systemctl restart hunt-dash && sleep 2 && echo "dashboard: $(systemctl is-active hunt-dash)"
   if grep -q "^TELEGRAM_BOT_TOKEN=." .env && { [ -f data/chatgpt.json ] || grep -q "^ANTHROPIC_API_KEY=." .env; }; then
     systemctl restart hunt && sleep 5 && systemctl --no-pager --lines=5 status hunt

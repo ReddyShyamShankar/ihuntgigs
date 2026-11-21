@@ -27,6 +27,9 @@ CHATGPT_MODEL = os.environ.get("HUNT_CHATGPT_MODEL", "")  # empty = first model 
 CHATGPT_EFFORT = os.environ.get("HUNT_CHATGPT_EFFORT", "")  # optional reasoning effort, e.g. "medium"
 MODEL = os.environ.get("HUNT_MODEL", "claude-opus-5-5")
 EFFORT = os.environ.get("HUNT_EFFORT", "medium")
+# Countries the owner can work from, comma-separated (server .env). A job limited to other countries is skipped.
+# Empty = no country check.
+COUNTRIES = {c.strip().lower() for c in os.environ.get("HUNT_COUNTRIES", "").split(",") if c.strip()}
 MAX_AI_PER_DAY = int(os.environ.get("HUNT_MAX_AI_PER_DAY", "60"))
 # Part of the daily AI limit kept for bids you ask for (✍️ / 🔁 / reply). The automatic lead queue
 # can never use it; bids may also use whatever the queue leaves unused. Total never goes over MAX_AI_PER_DAY.
@@ -69,4 +72,8 @@ ROLE_WORDS = ["writer", "writing", "content", "copywriter", "copy", "editor", "r
 # …and not a role he doesn't do.
 JOB_EXCLUDE = ["rust", "smart contract", "solidity", "qa", "kyc", "aml", "compliance", "hr", "recruiter", "talent", "devops",
                "security", "sre", "infrastructure", "backend", "back-end", "data engineer", "accountant",
-               "legal", "counsel", "intern", "audit", "payroll", "treasury", "operations"]
+               "legal", "counsel", "intern", "audit", "payroll", "treasury", "operations",
+               # added 2026-11-21 from the Himalayas review (owner: "picks are right")
+               "esports", "gaming", "teacher", "native speaker", "russian", "italian", "spanish", "german", "french",
+               "portuguese", "sales development", "sdr", "country manager", "data warehouse", "hris",
+               "risk analyst", "interview", "fps", "cs2", "us based", "us-based"]

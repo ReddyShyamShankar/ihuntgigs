@@ -63,9 +63,10 @@ LEAD_COLUMNS = {"prospect_id": "INTEGER", "lanes": "TEXT", "stage": "TEXT", "sta
 # PRD funnel: found → researched → drafted → approved → sent → replied → call_booked → won
 # (side exits: skipped, lost, needs_manual). Every status maps to one stage; `error` keeps the old one.
 STAGE_OF = {
-    "filtered": "found", "queued": "found", "prospect_new": "found", "prospect_ready": "found", "researched": "researched", "other_language": "skipped", "pick_new": "found", "not_contract": "skipped", "off_niche": "skipped", "pick": "found", "later": "found",
+    "filtered": "found", "queued": "found", "prospect_new": "found", "prospect_ready": "found", "researched": "researched", "other_language": "skipped", "pick_new": "found", "not_contract": "skipped", "off_niche": "skipped", "wrong_country": "skipped", "pick": "found", "later": "found",
     "to_write": "found", "low": "researched", "duplicate": "researched", "draft_failed": "researched",
     "to_phone": "drafted", "drafted": "drafted", "to_approve": "drafted", "pitch_approved": "approved", "sending": "approved", "fu_drafted": "sent", "fu_to_approve": "sent", "fu_approved": "sent", "fu_sending": "sent", "bounced": "needs_manual", "unsubscribed": "lost", "blocked": "skipped", "approved": "approved", "bid_approved": "approved",
+    "send_wait": "drafted", "apply_ready": "approved", "applying_srv": "approved", "mac_ready": "approved", "stopped": "skipped",
     "applying": "approved", "applied": "sent", "sent": "sent", "replied": "replied",
     "call_booked": "call_booked", "won": "won", "lost": "lost", "skipped": "skipped",
     "needs_you": "needs_manual", "needs_manual": "needs_manual", "failed": "needs_manual",
