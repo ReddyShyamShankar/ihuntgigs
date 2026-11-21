@@ -89,6 +89,42 @@ PROFILE_WINS = re.compile(r"\b(first|last|full|given|family|sur)?[\s_-]*name\b|e
                           r"current (company|employer)|current (title|role|position)|job title", re.I)
 
 
+# Rough USD → other currency rates, only for answering "expected salary" boxes (rounded anyway).
+FX = {"USD": 1.0, "EUR": 0.87, "GBP": 0.76, "AED": 3.67, "INR": 88.0, "CAD": 1.40, "AUD": 1.53, "SGD": 1.30,
+      "CHF": 0.80, "SAR": 3.75}
+_CUR = [("EUR", r"\beur(o|os)?\b|€"), ("GBP", r"\bgbp\b|£|pounds?"), ("AED", r"\baed\b|dirham"),
+        ("INR", r"\binr\b|₹|rupees?|\blpa\b|lakh"), ("CAD", r"\bcad\b"), ("AUD", r"\baud\b"),
+        ("SGD", r"\bsgd\b"), ("CHF", r"\bchf\b"), ("SAR", r"\bsar\b|riyal"), ("USD", r"\busd\b|\$|dollars?")]
+
+
+def pay_answer(p: dict, question: str) -> str:
+    """Expected pay for a form box, from the owner's hourly rate (profile `rate`, e.g. "35 USD/hour") and
+    weekly hours (`hours_per_week`, e.g. "40+"), in the period and currency the question asks for.
+    No rate in the profile → "" (the question goes to the owner)."""
+    m = re.search(r"\d+(\.\d+)?", str(p.get("rate", "")))
+    if not m:
+        return ""
+    hourly = float(m.group())
+    hours = int((re.search(r"\d+", str(p.get("hours_per_week", ""))) or re.search(r"\d+", "40")).group())
+    q = question.lower()
+    cur = next((c for c, rx in _CUR if re.search(rx, q)), "USD")
+    if re.search(r"\b(annual|annually|yearly|per (year|annum)|a year|/ ?year|p\.?a\.?|ctc|lpa)\b", q):
+        amount, period, step = hourly * hours * 52, "per year", 1000
+    elif re.search(r"\b(month|monthly|per month|/ ?month)\b", q):
+        amount, period, step = hourly * hours * 52 / 12, "per month", 100
+    elif re.search(r"\b(week|weekly)\b", q):
+        amount, period, step = hourly * hours, "per week", 10
+    elif re.search(r"\b(day|daily)\b", q):
+        amount, period, step = hourly * 8, "per day", 5
+    elif re.search(r"\b(hour|hourly)\b", q):
+        amount, period, step = hourly, "per hour", 1
+    else:  # "salary expectations" with no period: say it as monthly, the usual default
+        amount, period, step = hourly * hours * 52 / 12, "per month", 100
+    value = round(amount * FX[cur] / step) * step
+    gross = " gross" if "gross" in q or period in ("per month", "per year") else ""
+    return f"{value:,.0f} {cur} {period}{gross}"
+
+
 def owner_answers(p: dict) -> list[tuple[re.Pattern, list[str]]]:
     """profile.yaml `answers:` → [(question pattern, acceptable answers in order of preference)].
     Only these questions are ever answered on tick-one questions; anything else goes to the owner."""
@@ -141,8 +177,10 @@ def field_rules(p: dict, cover: str) -> list[tuple[re.Pattern, str]]:
          str(p.get("years_experience", ""))),
         # An hourly-rate box gets the owner's rate; any other pay question (monthly/yearly salary, other
         # currency) is left blank so it goes to the owner instead of a wrong "35 USD/hour".
-        (R(r"hourly rate|rate per hour|per hour"), str(p.get("rate", ""))),
-        (R(r"salary|compensation|expected pay|pay expectation|remuneration|\brate\b"), ""),
+        # Pay questions: worked out from the owner's hourly rate, in the period + currency the form asks
+        # (owner, 2026-11-21: "you give a number based on my profile"). See pay_answer().
+        (R(r"salary|compensation|expected pay|pay expectation|remuneration|\bctc\b|hourly rate|rate per hour|"
+           r"per hour|\brate\b"), lambda desc: pay_answer(p, desc)),
         (R(r"notice period|start date|when can you start|availability"), p.get("availability", "")),
         (R(r"how did you hear|referr"), p.get("heard_from", "")),
         (R(r"cover letter|additional info|anything else|why (do you|are you)|tell us|motivation|message|introduc"), cover),
@@ -228,6 +266,10 @@ def fill_form(page, p: dict, cover: str) -> dict:
             required = (el.get_attribute("required") is not None or el.get_attribute("aria-required") == "true"
                         or "*" in desc or "✱" in desc)
             value = next((v for rx, v in rules if rx.search(desc)), "")
+            if callable(value):
+                value = value(desc)
+            if value and kind == "number":  # number-only boxes take digits only
+                value = re.sub(r"[^\d.]", "", str(value).split(" ")[0])
             current = (el.input_value() or "").strip()
             if current:
                 # The form (or its CV reader) filled this already. For who-you-are boxes the owner's
