@@ -139,7 +139,7 @@ def field_rules(p: dict, cover: str) -> list[tuple[re.Pattern, str]]:
         (R(r"how did you hear|referr"), p.get("heard_from", "")),
         (R(r"cover letter|additional info|anything else|why (do you|are you)|tell us|motivation|message|introduc"), cover),
         # last: a field whose label is just "Name" / "Full name" / "Your name" (not "Company name")
-        (R(r"^\s*(your |full[\s_-]*|legal )?name\s*\*?\s*(\||$)"), p["full_name"]),
+        (R(r"^\s*(your |full[\s_-]*|legal )?name\s*[*✱]?\s*(\||$)"), p["full_name"]),
     ]
 
 
