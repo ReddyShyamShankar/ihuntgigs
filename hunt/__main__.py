@@ -21,7 +21,7 @@ import traceback
 from . import (brain, chatgpt, contacts, followups, gmail_alerts, outreach, pick, pitch, registry, research,
                sender, store, telegram, youtube)
 from .config import COUNTRIES, BID_RESERVE, MAX_AI_PER_DAY, MAX_AI_PER_RUN, MIN_SCORE, RUN_EVERY_MINUTES, TELEGRAM_CHAT_ID
-from .filters import blocked, is_contract, keep, prescore, wrong_country
+from .filters import blocked, is_contract, keep, prescore, wanted, wrong_country
 from . import autoapply, settings, sources
 from .sources import collect, pick_sources
 
@@ -34,7 +34,7 @@ def job_status(lead: dict, niche_ok: bool, picky: set) -> str:
     `flow: pick` sources (Freelancer) are already filtered by skill on the site, so they skip the niche check."""
     if lead["kind"] == "prospect":  # YouTube channels wait for research (B5)
         return "prospect_new"
-    if not is_contract(lead):
+    if not wanted(lead):  # neither contract work nor a remote job (decision #31)
         return "not_contract"
     if blocked(lead.get("title", "")):
         return "off_niche"

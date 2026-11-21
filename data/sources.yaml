@@ -2,13 +2,14 @@
 # kind: job = a posted role (only CONTRACT / freelance ones are kept; full-time is dropped on arrival);
 #       ask = someone publicly asking for a freelancer.
 # contract: always = every post there is freelance work (no full-time check needed).
+# remote: always = remote-only board: full-time jobs there are kept too (decision #31: contract, or remote full-time).
 
 # Funding news (Google News, Inc42, Crypto Fundraising) removed 2026-11-20: contract jobs only.
 
 rss:
   - {name: cryptojobslist, url: 'https://cryptojobslist.com/rss', kind: job}
   - {name: cryptojobs, url: 'https://www.cryptojobs.com/jobs/feed', kind: job}
-  - {name: weworkremotely, url: 'https://weworkremotely.com/remote-jobs.rss', kind: job}
+  - {name: weworkremotely, url: 'https://weworkremotely.com/remote-jobs.rss', kind: job, remote: always}
   - {name: reddit_forhire, url: 'https://www.reddit.com/r/forhire/new/.rss', kind: ask, title_must_include: '[hiring]'}
   # Added 2026-11-15 (more gig / job places)
   - {name: cryptocurrencyjobs, url: 'https://cryptocurrencyjobs.co/index.xml', kind: job}
@@ -17,35 +18,35 @@ rss:
   - {name: reddit_designjobs, url: 'https://www.reddit.com/r/DesignJobs/new/.rss', kind: ask, title_must_include: 'hiring'}
 
 json:
-  - {name: remoteok, url: 'https://remoteok.com/api', kind: job}
-  - {name: remotive, url: 'https://remotive.com/api/remote-jobs?limit=200', kind: job}
+  - {name: remoteok, url: 'https://remoteok.com/api', kind: job, remote: always}
+  - {name: remotive, url: 'https://remotive.com/api/remote-jobs?limit=200', kind: job, remote: always}
   # apply: auto = no ✍️ tap: AI writes at once, 2 h safety window with ✋ Stop, then the robots apply (hunt/autoapply.py)
-  - {name: himalayas, url: 'https://himalayas.app/jobs/api?limit=100', kind: job, apply: auto}
+  - {name: himalayas, url: 'https://himalayas.app/jobs/api?limit=100', kind: job, apply: auto, remote: always}
   # Gig marketplaces (contract by nature). Every kept job uses the pick flow: card → ✍️ → AI writes → checker → you approve.
   # Freelancer.com removed 2026-11-21: free plan is ~6 bids/month, owner won't pay for bids.
   - {name: braintrust, format: braintrust, kind: job, contract: always, url: 'https://app.usebraintrust.com/api/jobs/?page_size=50'}
-  - {name: jobicy_copywriting, format: jobicy, kind: job, url: 'https://jobicy.com/api/v2/remote-jobs?count=50&industry=copywriting'}
-  - {name: jobicy_finance, format: jobicy, kind: job, url: 'https://jobicy.com/api/v2/remote-jobs?count=50&industry=accounting-finance'}
-  - {name: jobicy_design, format: jobicy, kind: job, url: 'https://jobicy.com/api/v2/remote-jobs?count=50&industry=design-multimedia'}
-  - {name: workingnomads, format: workingnomads, kind: job, url: 'https://www.workingnomads.com/api/exposed_jobs/'}
+  - {name: jobicy_copywriting, format: jobicy, kind: job, url: 'https://jobicy.com/api/v2/remote-jobs?count=50&industry=copywriting', remote: always}
+  - {name: jobicy_finance, format: jobicy, kind: job, url: 'https://jobicy.com/api/v2/remote-jobs?count=50&industry=accounting-finance', remote: always}
+  - {name: jobicy_design, format: jobicy, kind: job, url: 'https://jobicy.com/api/v2/remote-jobs?count=50&industry=design-multimedia', remote: always}
+  - {name: workingnomads, format: workingnomads, kind: job, url: 'https://www.workingnomads.com/api/exposed_jobs/', remote: always}
   # Searches on general boards for forex / stocks / trading roles (not just crypto)
-  - {name: himalayas_forex, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=forex', kind: job, apply: auto}
-  - {name: himalayas_trading, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=trading', kind: job, apply: auto}
-  - {name: himalayas_stocks, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=stock%20market', kind: job, apply: auto}
-  - {name: himalayas_fintech, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=fintech', kind: job, apply: auto}
+  - {name: himalayas_forex, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=forex', kind: job, apply: auto, remote: always}
+  - {name: himalayas_trading, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=trading', kind: job, apply: auto, remote: always}
+  - {name: himalayas_stocks, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=stock%20market', kind: job, apply: auto, remote: always}
+  - {name: himalayas_fintech, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=fintech', kind: job, apply: auto, remote: always}
   # The owner's 12 core searches (same as the LinkedIn alerts), on Himalayas (Remotive ignores search words, so only its main feed is read)
-  - {name: himalayas_crypto_content_writer, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=crypto%20content%20writer', kind: job, apply: auto}
-  - {name: himalayas_financial_writer, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=financial%20writer', kind: job, apply: auto}
-  - {name: himalayas_crypto_community_manager, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=crypto%20community%20manager', kind: job, apply: auto}
-  - {name: himalayas_trading_mentor, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=trading%20mentor', kind: job, apply: auto}
-  - {name: himalayas_market_analyst, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=market%20analyst', kind: job, apply: auto}
-  - {name: himalayas_trading_signals, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=trading%20signals', kind: job, apply: auto}
-  - {name: himalayas_fintech_designer, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=fintech%20designer', kind: job, apply: auto}
-  - {name: himalayas_pine_script, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=pine%20script', kind: job, apply: auto}
-  - {name: himalayas_trading_bot, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=trading%20bot', kind: job, apply: auto}
-  - {name: himalayas_telegram_bot, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=telegram%20bot', kind: job, apply: auto}
-  - {name: himalayas_ai_video, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=ai%20video', kind: job, apply: auto}
-  - {name: himalayas_forex_business_development, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=forex%20business%20development', kind: job, apply: auto}
+  - {name: himalayas_crypto_content_writer, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=crypto%20content%20writer', kind: job, apply: auto, remote: always}
+  - {name: himalayas_financial_writer, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=financial%20writer', kind: job, apply: auto, remote: always}
+  - {name: himalayas_crypto_community_manager, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=crypto%20community%20manager', kind: job, apply: auto, remote: always}
+  - {name: himalayas_trading_mentor, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=trading%20mentor', kind: job, apply: auto, remote: always}
+  - {name: himalayas_market_analyst, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=market%20analyst', kind: job, apply: auto, remote: always}
+  - {name: himalayas_trading_signals, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=trading%20signals', kind: job, apply: auto, remote: always}
+  - {name: himalayas_fintech_designer, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=fintech%20designer', kind: job, apply: auto, remote: always}
+  - {name: himalayas_pine_script, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=pine%20script', kind: job, apply: auto, remote: always}
+  - {name: himalayas_trading_bot, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=trading%20bot', kind: job, apply: auto, remote: always}
+  - {name: himalayas_telegram_bot, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=telegram%20bot', kind: job, apply: auto, remote: always}
+  - {name: himalayas_ai_video, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=ai%20video', kind: job, apply: auto, remote: always}
+  - {name: himalayas_forex_business_development, format: himalayas, url: 'https://himalayas.app/jobs/api/search?q=forex%20business%20development', kind: job, apply: auto, remote: always}
 
 # Trading / investing companies' own job pages (official public feeds; remote jobs only).
 # These are the same form types the auto-apply helper fills (Greenhouse, Lever, Ashby).

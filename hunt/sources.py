@@ -203,6 +203,7 @@ def collect(stats: dict | None = None, cfg: dict | None = None) -> tuple[list[di
     leads, errors = [], []
     searches = {s["name"] for s in cfg.get("json", []) or [] if "/search?q=" in s.get("url", "")}
     always = {s["name"] for group in ("rss", "json") for s in cfg.get(group, []) or [] if s.get("contract") == "always"}
+    remote = {s["name"] for group in ("rss", "json") for s in cfg.get(group, []) or [] if s.get("remote") == "always"}
     jobs = [("news:" + n.get("region", "US"), _rss, (_gnews_url(n["q"], n.get("region", "US")), "funding"))
             for n in cfg.get("news", []) if on("news:" + n.get("region", "US"), n)]
     jobs += [(s["name"], _rss, (s["url"], s["kind"], s.get("title_must_include"))) for s in cfg.get("rss", []) if on(s["name"], s)]
@@ -219,6 +220,9 @@ def collect(stats: dict | None = None, cfg: dict | None = None) -> tuple[list[di
             if name in always:
                 for l in got:
                     l["extra"] = {**(l.get("extra") or {}), "contract_always": True}
+            if name in remote:  # remote-only board, or a career page read with remote_only on
+                for l in got:
+                    l["extra"] = {**(l.get("extra") or {}), "remote_always": True}
             if name in searches:  # the owner's own search words found it: trusted as in the niche
                 for l in got:
                     l["extra"] = {**(l.get("extra") or {}), "from_search": True}
