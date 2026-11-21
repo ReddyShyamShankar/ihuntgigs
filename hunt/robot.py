@@ -2,7 +2,7 @@
 
 Himalayas job pages sit behind a "verify you're human" wall, and Hunt never gets past those by trickery.
 So the robot skips Himalayas: it looks the job up on the company's OWN job system through that system's
-public job list (Greenhouse, Lever, Ashby), opens the real application form in a hidden browser, fills it
+public job list (Greenhouse, Lever incl. Lever Europe, Ashby), opens the real application form in a hidden browser, fills it
 from the owner's profile + the locked cover note, attaches the CV and submits.
 
 Anything it can't finish (no company form found, CAPTCHA, a question it can't answer) goes to the Mac
@@ -36,6 +36,9 @@ BOARDS = {
                    lambda j: [(x.get("title", ""), x.get("absolute_url", "")) for x in j.get("jobs", [])]),
     "lever": ("https://api.lever.co/v0/postings/{}?mode=json",
               lambda j: [(x.get("text", ""), x.get("hostedUrl", "")) for x in j] if isinstance(j, list) else []),
+    # Lever keeps European companies on a separate server (jobs.eu.lever.co)
+    "lever_eu": ("https://api.eu.lever.co/v0/postings/{}?mode=json",
+                 lambda j: [(x.get("text", ""), x.get("hostedUrl", "")) for x in j] if isinstance(j, list) else []),
     "ashby": ("https://api.ashbyhq.com/posting-api/job-board/{}",
               lambda j: [(x.get("title", ""), x.get("jobUrl") or x.get("applyUrl", "")) for x in j.get("jobs", [])]),
 }
@@ -119,11 +122,17 @@ def run_one(con, row, apply=fill_and_submit, find=find_form) -> str:
     try:
         ats, link = find(row["company"], row["title"], hint)
         if not link and "linkedin.com" in (row["url"] or ""):
-            d["robot_note"] = "Easy Apply on LinkedIn: open it, paste the note, send"
+            if (d.get("extra") or {}).get("li_offsite"):
+                d["robot_note"] = "Apply on company website: open the job on LinkedIn, click Apply, paste the note"
+                msg = ("🌐 This job's button is \"Apply on company website\", on a job system the robot can't fill "
+                       "yet. Open the job, click Apply, paste the note above, then tap ✅ I applied.")
+            else:
+                d["robot_note"] = "Easy Apply on LinkedIn: open it, paste the note, send"
+                msg = ("🔗 This one is LinkedIn Easy Apply. Open the job, paste the note above, send, then tap "
+                       "✅ I applied. (Hunt never works inside your LinkedIn account.)")
             store.update(con, lead_id, status="needs_you", data=d)
             autoapply.rebutton(con, lead_id)
-            _note(row, "🔗 No company form found, so this one is LinkedIn Easy Apply. Open the job, paste the "
-                       "note above, send, then tap ✅ I applied. (Hunt never works inside your LinkedIn account.)")
+            _note(row, msg)
             return "linkedin"
         if not link:
             why = "The company's own job form wasn't found on Greenhouse, Lever or Ashby"
