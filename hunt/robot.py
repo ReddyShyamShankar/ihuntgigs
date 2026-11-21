@@ -118,6 +118,13 @@ def run_one(con, row, apply=fill_and_submit, find=find_form) -> str:
     hint = (d.get("extra") or {}).get("company_slug", "")
     try:
         ats, link = find(row["company"], row["title"], hint)
+        if not link and "linkedin.com" in (row["url"] or ""):
+            d["robot_note"] = "Easy Apply on LinkedIn: open it, paste the note, send"
+            store.update(con, lead_id, status="needs_you", data=d)
+            autoapply.rebutton(con, lead_id)
+            _note(row, "🔗 No company form found, so this one is LinkedIn Easy Apply. Open the job, paste the "
+                       "note above, send, then tap ✅ I applied. (Hunt never works inside your LinkedIn account.)")
+            return "linkedin"
         if not link:
             why = "The company's own job form wasn't found on Greenhouse, Lever or Ashby"
             autoapply.mac_queue(con, store.get(con, lead_id), why)

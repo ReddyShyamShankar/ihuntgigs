@@ -18,7 +18,7 @@ import threading
 import time
 import traceback
 
-from . import (brain, chatgpt, contacts, followups, gmail_alerts, outreach, pick, pitch, registry, research,
+from . import (brain, chatgpt, contacts, followups, gmail_alerts, linkedin, outreach, pick, pitch, registry, research,
                sender, store, telegram, youtube)
 from .config import COUNTRIES, BID_RESERVE, MAX_AI_PER_DAY, MAX_AI_PER_RUN, MIN_SCORE, RUN_EVERY_MINUTES, TELEGRAM_CHAT_ID
 from .filters import blocked, is_contract, keep, prescore, wanted, wrong_country
@@ -57,6 +57,12 @@ def gather(con, dry=False) -> list[dict]:
         except Exception as ex:  # noqa: BLE001 — Gmail trouble must not stop the other sources
             errors.append(f"linkedin_alerts (gmail): {ex}")
             stats["linkedin_alerts"] = {"count": 0, "error": str(ex)[:300]}
+    if "linkedin_search" in reg and reg["linkedin_search"]["enabled"]:  # public search, worldwide (decision #32)
+        got, st = linkedin.collect(None if dry else con, per_run=1 if dry else None)
+        leads += got
+        stats["linkedin_search"] = st
+        if st["error"]:
+            errors.append(f"linkedin_search: {st['error']}")
     # Dry runs skip YouTube: it would spend quota and move the page cursor past channels it never saves.
     if not dry and "youtube" in reg and reg["youtube"]["enabled"] and youtube.enabled():
         got, st = youtube.collect(con, sources.config().get("youtube") or {})

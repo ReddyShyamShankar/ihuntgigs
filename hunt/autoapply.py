@@ -24,7 +24,10 @@ STATUSES = {WAIT, READY, ROBOT, MAC, STOPPED}
 
 def auto_sources() -> set[str]:
     cfg = yaml.safe_load((DATA / "sources.yaml").read_text()) or {}
-    return {s["name"] for g in ("rss", "json") for s in cfg.get(g, []) or [] if s.get("apply") == "auto"}
+    out = {s["name"] for g in ("rss", "json") for s in cfg.get(g, []) or [] if s.get("apply") == "auto"}
+    if (cfg.get("linkedin_search") or {}).get("apply") == "auto":
+        out.add("linkedin_search")
+    return out
 
 
 def is_auto(row) -> bool:

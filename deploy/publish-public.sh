@@ -13,7 +13,7 @@ NOREPLY="${GH_ID}+${GH_LOGIN}@users.noreply.github.com"
 FILES=(
   hunt/__init__.py hunt/__main__.py hunt/brain.py hunt/chatgpt.py hunt/config.py
   hunt/filters.py hunt/gmail_alerts.py hunt/sources.py hunt/store.py hunt/telegram.py hunt/pick.py hunt/policy.py
-  hunt/registry.py hunt/youtube.py hunt/contacts.py hunt/research.py hunt/pitch.py hunt/outreach.py hunt/mailer.py hunt/sender.py hunt/followups.py hunt/totp.py hunt/dashboard.py hunt/settings.py hunt/autoapply.py hunt/robot.py
+  hunt/registry.py hunt/youtube.py hunt/contacts.py hunt/research.py hunt/pitch.py hunt/outreach.py hunt/mailer.py hunt/sender.py hunt/followups.py hunt/totp.py hunt/dashboard.py hunt/settings.py hunt/autoapply.py hunt/robot.py hunt/linkedin.py
   applier/hunt_applier.py applier/profile.example.yaml
   deploy/deploy.sh deploy/hunt.service deploy/hunt-dash.service deploy/hunt-robot.service deploy/hunt-robot.timer deploy/dashboard-domain.sh deploy/set-secret.sh deploy/push-login.sh deploy/publish-public.sh
   data/sources.yaml data/portfolio.example.yaml

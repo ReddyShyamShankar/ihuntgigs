@@ -22,7 +22,7 @@ import yaml
 from .config import DATA
 
 TIERS = ("open", "limited", "manual")
-GROUP_LAYER = {"news": 3, "rss": 1, "json": 1, "careers": 1, "gmail": 1, "youtube": 3}
+GROUP_LAYER = {"news": 3, "rss": 1, "json": 1, "careers": 1, "gmail": 1, "youtube": 3, "linkedin": 1}
 MANUAL_WORDS = ("linkedin", "tradingview", "mql5", "upwork", "instagram", "telegram_channel")
 LIMITED_WORDS = ("reddit", "discord", "producthunt")
 
@@ -115,6 +115,8 @@ def load(cfg: dict | None = None, overrides: dict | None = None) -> dict[str, di
     for c in cfg.get("careers", []) or []:
         out["careers:" + c["slug"]] = _entry("careers:" + c["slug"], "careers", c)
     out["linkedin_alerts"] = _entry("linkedin_alerts", "gmail", {})
+    if cfg.get("linkedin_search"):  # LinkedIn public job search, worldwide (hunt/linkedin.py)
+        out["linkedin_search"] = _entry("linkedin_search", "linkedin", cfg["linkedin_search"])
     if cfg.get("youtube"):  # Phase 1: finance YouTube channels (official API)
         out["youtube"] = _entry("youtube", "youtube", cfg["youtube"])
     for name, over in (cfg.get("overrides") or {}).items():
