@@ -133,13 +133,14 @@ def _allowed_place(place: str, allowed: set) -> bool:
 
 
 # "UAE Nationals", "Emiratis only", "Saudi nationals only": a citizenship rule, not a place
-NATIONALS = re.compile(r"\b(emirati(s|sation)?|[a-z]+ nationals?( only)?|citizens? only|nationals? only)\b", re.I)
+NATIONALS = re.compile(r"\b(emirati(s|sation)?|[a-z]+ nationals?( only)?|([a-z]+ )?citizens? only|nationals? only)\b", re.I)
 
 
 def citizens_only(lead: dict) -> bool:
-    """Only citizens of one country may apply. The owner is an Indian citizen, so Indian-only is fine."""
+    """Only citizens of one country may apply (US citizens only, Saudi nationals…). Owner's rule (2026-11-21):
+    keep Indian-only and UAE-only (Emirati, UAE nationals) jobs; the owner decides on those."""
     m = NATIONALS.search(f"{lead.get('title', '')}\n{lead.get('summary', '')}")
-    return bool(m) and "indian" not in m.group(0).lower()
+    return bool(m) and not any(w in m.group(0).lower() for w in ("indian", "uae", "emirati"))
 
 
 def wrong_country(lead: dict, allowed: set) -> bool:
