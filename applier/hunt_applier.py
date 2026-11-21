@@ -84,11 +84,40 @@ def load_profile() -> dict:
     return p
 
 
+def owner_answers(p: dict) -> list[tuple[re.Pattern, list[str]]]:
+    """profile.yaml `answers:` → [(question pattern, acceptable answers in order of preference)].
+    Only these questions are ever answered on tick-one questions; anything else goes to the owner."""
+    out = []
+    for a in p.get("answers") or []:
+        say = a.get("say")
+        say = [say] if isinstance(say, str) else list(say or [])
+        if a.get("ask") and say:
+            out.append((re.compile(a["ask"], re.I), [str(s) for s in say]))
+    return out
+
+
+def answer_choice(p: dict, question: str, options: list[str]) -> int:
+    """Index of the option to tick for `question`, or -1. Exact match first, then 'starts with'."""
+    for rx, say in owner_answers(p):
+        if not rx.search(question):
+            continue
+        norm = [" ".join(o.split()).lower() for o in options]
+        for want in (s.lower() for s in say):
+            if want in norm:
+                return norm.index(want)
+            for i, o in enumerate(norm):
+                if o.startswith(want):
+                    return i
+        # matched, but none of these answers is offered: try the next pattern, else the owner decides
+    return -1
+
+
 def field_rules(p: dict, cover: str) -> list[tuple[re.Pattern, str]]:
     """Label/name/placeholder text → value. First match wins; empty values are skipped."""
     def R(s):
         return re.compile(s, re.I)
-    return [
+    # Owner's own standard answers (profile.yaml `answers:`) win over the built-in rules.
+    return [(rx, choices[0]) for rx, choices in owner_answers(p)] + [
         (R(r"first[\s_-]*name|given name|forename"), p["first_name"]),
         (R(r"last[\s_-]*name|surname|family name"), p["last_name"]),
         (R(r"e-?mail"), p["email"]),
@@ -205,7 +234,8 @@ def fill_form(page, p: dict, cover: str) -> dict:
                 missing.append(desc or kind)
         except Exception as ex:  # noqa: BLE001 — one odd field must not stop the rest
             missing.append(f"(field error: {str(ex)[:60]})")
-    # 3) Required tick-box / multiple-choice questions: never guessed, always handed to the owner.
+    # 3) Required tick-box / multiple-choice questions: never guessed. Tick-one (radio) questions the
+    #    owner pre-answered in profile.yaml `answers:` are ticked; everything else goes to the owner.
     groups = page.evaluate("""() => {
       const out = [];
       const seen = new Set();
@@ -214,19 +244,37 @@ def fill_form(page, p: dict, cover: str) -> dict:
         seen.add(el.name);
         const box = el.closest('.application-question, fieldset, [class*=question], [class*=Question]')
                  || el.closest('.field, .form-group, li');
-        const all = document.querySelectorAll(`input[name="${CSS.escape(el.name)}"]`);
+        const all = [...document.querySelectorAll(`input[name="${CSS.escape(el.name)}"]`)];
         const label = box ? (box.querySelector('.application-label, legend, label, [class*=label]') || box).innerText.split('\\n')[0] : el.name;
-        const required = [...all].some(i => i.required || i.getAttribute('aria-required') === 'true') || /[*✱]/.test(label);
-        if (required && ![...all].some(i => i.checked)) out.push(label.trim().slice(0, 120));
+        const required = all.some(i => i.required || i.getAttribute('aria-required') === 'true') || /[*✱]/.test(label);
+        const options = all.map(i => ((i.closest('label') && i.closest('label').innerText) || i.value || '').trim());
+        if (required && !all.some(i => i.checked))
+          out.push({name: el.name, radio: el.type === 'radio', label: label.trim().slice(0, 120), options});
       }
       return out;
     }""")
-    missing.extend(groups)
+    for g in groups:
+        pick = answer_choice(p, g["label"], g["options"]) if g["radio"] else -1
+        if pick >= 0:
+            try:
+                page.query_selector_all(f'input[name="{g["name"]}"]')[pick].check()
+                filled.append(f'{g["label"][:40]} → {g["options"][pick]}')
+                continue
+            except Exception:  # noqa: BLE001
+                pass
+        missing.append(g["label"])
     for sel in page.query_selector_all("select"):  # required dropdowns we can't answer safely
         try:
             if sel.is_visible() and (sel.get_attribute("required") is not None or "*" in _describe(sel)):
                 if not (sel.input_value() or "").strip():
-                    missing.append(_describe(sel) or "dropdown")
+                    desc = _describe(sel)
+                    labels = [o.inner_text() for o in sel.query_selector_all("option")]
+                    pick = answer_choice(p, desc, labels)
+                    if pick >= 0 and labels[pick].strip():
+                        sel.select_option(index=pick)
+                        filled.append(f"{desc.split(' | ')[0][:40]} → {labels[pick].strip()}")
+                    else:
+                        missing.append(desc or "dropdown")
         except Exception:  # noqa: BLE001
             pass
     return {"filled": filled, "missing": missing}

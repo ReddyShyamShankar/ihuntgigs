@@ -16,3 +16,12 @@ rate: ""                  # left blank on purpose: forms asking pay come back as
 availability: Immediately
 heard_from: Job board
 resume: /full/path/to/cv.pdf
+
+# Optional: standard answers to common form questions. `ask` = question pattern (regex),
+# `say` = answers in order of preference; the first one the form offers is ticked/typed.
+# Questions not listed here are never guessed: they come back to you as NEEDS YOU.
+answers:
+  - ask: "count(r)?y (where|in which) you (currently )?(reside|live)"
+    say: ["Portugal"]
+  - ask: "how did you (hear|find|learn) about"
+    say: ["LinkedIn", "Online job board", "Other"]
