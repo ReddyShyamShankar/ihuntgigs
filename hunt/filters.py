@@ -132,10 +132,22 @@ def _allowed_place(place: str, allowed: set) -> bool:
     return any(a in place or place in a for a in allowed) or bool(REGIONS.get(place, set()) & allowed)
 
 
+# "UAE Nationals", "Emiratis only", "Saudi nationals only": a citizenship rule, not a place
+NATIONALS = re.compile(r"\b(emirati(s|sation)?|[a-z]+ nationals?( only)?|citizens? only|nationals? only)\b", re.I)
+
+
+def citizens_only(lead: dict) -> bool:
+    """Only citizens of one country may apply. The owner is an Indian citizen, so Indian-only is fine."""
+    m = NATIONALS.search(f"{lead.get('title', '')}\n{lead.get('summary', '')}")
+    return bool(m) and "indian" not in m.group(0).lower()
+
+
 def wrong_country(lead: dict, allowed: set) -> bool:
-    """The job limits who may apply (site tag or job text) and none of the owner's countries is allowed."""
+    """The job limits who may apply (site tag, job text, or citizens only) and the owner can't."""
     if not allowed:
         return False
+    if citizens_only(lead):
+        return True
     only = [c.lower() for c in (lead.get("extra") or {}).get("countries") or []]
     only += countries_in_text(f"{lead.get('title', '')}\n{lead.get('summary', '')}")
     return bool(only) and not any(_allowed_place(c, allowed) for c in only)

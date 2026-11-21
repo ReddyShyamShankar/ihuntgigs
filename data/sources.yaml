@@ -83,35 +83,58 @@ careers:
 # Phase 1 (PRD §18): finance YouTube channels via the official YouTube Data API (needs YOUTUBE_API_KEY).
 # Every channel found is stored as a prospect — no size or quality filter. Each query digs one results
 # page deeper every run. Budget: Google gives 10,000 units/day; one search ≈ 151 units (≈50 channels).
-linkedin_search:  # LinkedIn's PUBLIC job search (logged out, no account): hunt/linkedin.py, decision #32
+linkedin_search:  # LinkedIn's PUBLIC job search (logged out, no account): hunt/linkedin.py, decisions #32, #34
   enabled: true
   apply: auto      # company-site jobs → server robot; Easy Apply → owner by hand (never inside LinkedIn)
   hours: 24        # posted in the last 24 hours, remote only
-  per_run: 5       # keyword × place searches per hourly run → all 108 covered about once a day
+  per_run: 7       # keyword × place searches per hourly run → all 160 covered about once a day
   pages: 1         # 10 jobs per search
-  keywords:
-    - forex broker business development
-    - AI video creator finance
-    - trading automation telegram bot developer
-    - crypto community manager
-    - financial writer stock market
-    - pine script tradingview developer
-    - fintech product designer
-    - trading signals analyst
-    - forex market analyst
-    - trading mentor educator
-    - forex content writer
+  keywords:        # owner's skills (Upwork history, LinkedIn, Notion, Upwork robot searches), approved 2026-11-21
     - crypto content writer
-  locations:       # LinkedIn place IDs, each checked live 2026-11-21
+    - forex content writer
+    - financial content writer
+    - blockchain writer
+    - whitepaper writer
+    - stock market writer
+    - financial copywriter
+    - crypto copywriter
+    - ebook ghostwriter finance
+    - crypto analyst
+    - forex market analyst
+    - technical analyst trading
+    - equity research analyst
+    - trading signals analyst
+    - market news writer
+    - fintech product designer
+    - UI UX designer crypto
+    - Web3 designer
+    - trading app designer
+    - Figma designer fintech
+    - pine script developer
+    - MT5 expert advisor developer
+    - trading bot developer
+    - Telegram bot developer crypto
+    - algorithmic trading developer
+    - AI automation developer
+    - crypto video editor
+    - finance video creator
+    - motion graphics crypto
+    - crypto community manager
+    - Web3 community manager
+    - Discord moderator crypto
+    - crypto customer support
+    - forex broker business development
+    - crypto marketing manager
+    - Web3 growth marketer
+    - forex affiliate manager
+    - KOL manager crypto
+    - trading educator
+    - trading course creator
+  locations:       # LinkedIn place IDs, checked live 2026-11-21. US/UK/AU/NZ/CA dropped: mostly country-locked jobs
     - {name: Worldwide, geo: 92000000}
     - {name: United Arab Emirates, geo: 104305776}
     - {name: India, geo: 102713980}
-    - {name: United States, geo: 103644278}
     - {name: European Union, geo: 91000000}
-    - {name: United Kingdom, geo: 101165590}
-    - {name: Australia, geo: 101452733}
-    - {name: New Zealand, geo: 105490917}
-    - {name: Canada, geo: 101174742}
 
 youtube:
   daily_units: 9000        # stop here; 1,000 kept spare
