@@ -31,6 +31,7 @@ $SSH "$HOST" 'set -e
   [ -d browsers ] || PLAYWRIGHT_BROWSERS_PATH=/opt/hunt/browsers .venv/bin/python -m playwright install --with-deps chromium >/dev/null
   chmod -R a+rX browsers
   install -d -o hunt -g hunt -m 700 data/robot-home data/robot-runs data/private
+  chown -R hunt:hunt data/robot-home data/robot-runs data/private   # the chown -R root above resets these
   chmod 644 data/*.yaml
   cp deploy/hunt.service /etc/systemd/system/hunt.service
   cp deploy/hunt-dash.service /etc/systemd/system/hunt-dash.service   # dashboard: 127.0.0.1 only

@@ -137,6 +137,23 @@ def _describe(el) -> str:
         return ""
 
 
+def pick_option(page, el, value: str) -> bool:
+    """Pick-from-list box (Country, City): click the list option that starts like our answer.
+    If no option matches, the typed text is cleared so the field shows up as NEEDS YOU, not half-filled."""
+    page.wait_for_timeout(1200)
+    want = value.lower().split(",")[0].strip()
+    for opt in page.query_selector_all("[role=option]"):
+        try:
+            if opt.is_visible() and (opt.inner_text() or "").strip().lower().startswith(want[:20]):
+                opt.click()
+                page.wait_for_timeout(400)
+                return True
+        except Exception:  # noqa: BLE001
+            pass
+    el.fill("")
+    return False
+
+
 def fill_form(page, p: dict, cover: str) -> dict:
     rules = field_rules(p, cover)
     filled, missing = [], []
@@ -178,9 +195,11 @@ def fill_form(page, p: dict, cover: str) -> dict:
             value = next((v for rx, v in rules if rx.search(desc)), "")
             if value:
                 el.fill(str(value))
-                if el.get_attribute("role") == "combobox" or el.get_attribute("aria-autocomplete"):
-                    page.wait_for_timeout(900)  # pick-from-list box (e.g. Country): choose the matching option
-                    el.press("Enter")
+                listbox = el.get_attribute("role") == "combobox" or el.get_attribute("aria-autocomplete")
+                if listbox and not pick_option(page, el, str(value)):  # never press Enter: it can submit the form
+                    if required:
+                        missing.append(desc or kind)
+                    continue
                 filled.append(desc.split(" | ")[0][:40] or kind)
             elif required:
                 missing.append(desc or kind)
