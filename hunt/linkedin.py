@@ -22,7 +22,7 @@ import yaml
 
 from . import store
 from .config import COUNTRIES, DATA
-from .filters import blocked, wrong_country
+from .filters import NOT_REMOTE, blocked, wrong_country
 from .sources import _lead
 
 NAME = "linkedin_search"
@@ -96,7 +96,9 @@ def to_lead(card: dict, posting: dict) -> dict:
     loc = card["location"] or "Worldwide"
     summary = f"{card['company']} on LinkedIn. Location: {loc}. {posting.get('description', '')}"
     lead = _lead(NAME, "job", card["title"], card["url"], summary, card["company"], card["posted"])
-    lead["extra"] = {"remote_always": True, "li_location": loc, "li_offsite": bool(posting.get("offsite_apply"))}
+    # LinkedIn's "remote" filter lets some office jobs through ("Work from Office"): the job text decides
+    remote = not NOT_REMOTE.search(f"{card['title']} {posting.get('description', '')}")
+    lead["extra"] = {"remote_always": remote, "li_location": loc, "li_offsite": bool(posting.get("offsite_apply"))}
     if posting.get("employment_type"):
         lead["extra"]["job_type"] = posting["employment_type"][:60]
     return lead

@@ -148,7 +148,7 @@ def blocked(title: str) -> bool:
 
 
 REMOTE = re.compile(r"\b(remote|work from home|wfh|anywhere|distributed)\b", re.I)
-NOT_REMOTE = re.compile(r"\b(hybrid|on-?site|in[- ]office|office[- ]based|relocat\w*)\b", re.I)
+NOT_REMOTE = re.compile(r"\b(hybrid|on-?site|in[- ]office|office[- ]based|work(ing)? from (the )?office|wfo|relocat\w*)\b", re.I)
 
 
 def is_remote(lead: dict) -> bool:
