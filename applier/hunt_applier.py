@@ -235,6 +235,10 @@ def pick_option(page, el, value: str) -> bool:
             except Exception:  # noqa: BLE001
                 pass
     el.fill("")
+    try:
+        el.press("Escape")  # close the empty list so the next try starts clean (Escape never submits)
+    except Exception:  # noqa: BLE001
+        pass
     return False
 
 
