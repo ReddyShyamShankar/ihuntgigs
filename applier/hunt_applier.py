@@ -125,6 +125,18 @@ def pay_answer(p: dict, question: str) -> str:
     return f"{value:,.0f} {cur} {period}{gross}"
 
 
+ACK = re.compile(r"\bi (understand|acknowledge|confirm|certify|attest|declare)\b|\bi have read\b|"
+                 r"information (provided|i have provided|given) (is|are) (true|accurate|correct)", re.I)
+NOT_ACK = re.compile(r"contact me|future (job|role|opening|opportunit|position)|talent (pool|community|network)|"
+                     r"newsletter|marketing|promotion|updates? (about|from|on)|sms|text messages?|whatsapp|"
+                     r"third[- ]part|share my|sell|subscribe|keep (my|me)|retain my|for up to \d", re.I)
+
+
+def is_acknowledgement(text: str) -> bool:
+    """A plain 'I understand / I confirm' statement — not consent to marketing, future contact or data sharing."""
+    return bool(ACK.search(text or "")) and not NOT_ACK.search(text or "")
+
+
 def owner_answers(p: dict) -> list[tuple[re.Pattern, list[str]]]:
     """profile.yaml `answers:` → [(question pattern, acceptable answers in order of preference)].
     Only these questions are ever answered on tick-one questions; anything else goes to the owner."""
@@ -327,6 +339,15 @@ def fill_form(page, p: dict, cover: str) -> dict:
       return out;
     }""")
     for g in groups:
+        # A single required "I understand / I confirm" box is ticked (owner, 2026-11-22, decision #36);
+        # anything about marketing, future contact or sharing data is never ticked.
+        if not g["radio"] and len(g["options"]) == 1 and is_acknowledgement(f'{g["label"]} {g["options"][0]}'):
+            try:
+                page.query_selector_all(f'input[name="{g["name"]}"]')[0].check()
+                filled.append(f'{g["label"][:40]} → ticked (acknowledgement)')
+                continue
+            except Exception:  # noqa: BLE001
+                pass
         pick = answer_choice(p, g["label"], g["options"]) if g["radio"] else -1
         if pick >= 0:
             try:
