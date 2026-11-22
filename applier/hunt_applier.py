@@ -181,7 +181,7 @@ def field_rules(p: dict, cover: str) -> list[tuple[re.Pattern, str]]:
         # (owner, 2026-11-21: "you give a number based on my profile"). See pay_answer().
         (R(r"salary|compensation|expected pay|pay expectation|remuneration|\bctc\b|hourly rate|rate per hour|"
            r"per hour|\brate\b"), lambda desc: pay_answer(p, desc)),
-        (R(r"notice period|start date|when (can|could|would) you start|earliest (start|date)|availability"), p.get("availability", "")),
+        (R(r"notice period|start date|when (can|could|would|will) you (start|be available)|available to start|earliest (start|date)|availability"), p.get("availability", "")),
         (R(r"how did you hear|referr"), p.get("heard_from", "")),
         (R(r"cover letter|additional info|anything else|why (do you|are you|did you apply)|why (this role|us|join)|tell us|motivation|message|introduc"), cover),
         # last: a field whose label is just "Name" / "Full name" / "Your name" (not "Company name")
@@ -219,6 +219,10 @@ def pick_option(page, el, value: str) -> bool:
     If no option matches, the typed text is cleared so the field shows up as NEEDS YOU, not half-filled."""
     short = value.split(",")[0].split("(")[0].strip()
     want = short.lower()
+    try:
+        el.click()  # React lists (Greenhouse) only listen once the box has focus
+    except Exception:  # noqa: BLE001
+        pass
     el.fill(short)
     for _ in range(12):
         page.wait_for_timeout(500)
@@ -286,7 +290,11 @@ def fill_form(page, p: dict, cover: str) -> dict:
             if value:
                 el.fill(str(value))
                 listbox = el.get_attribute("role") == "combobox" or el.get_attribute("aria-autocomplete")
-                if listbox and not pick_option(page, el, str(value)):  # never press Enter: it can submit the form
+                # never press Enter: it can submit the form. If the list lacks our first answer, try the
+                # owner's other accepted answers for this question ("Mechanical Engineering" → "Engineering").
+                if listbox and not any(pick_option(page, el, a) for a in
+                                       [str(value)] + [s for rx, say in owner_answers(p) if rx.search(desc)
+                                                       for s in say if s != str(value)]):
                     if required:
                         missing.append(desc or kind)
                     continue
