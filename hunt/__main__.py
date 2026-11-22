@@ -36,7 +36,7 @@ def job_status(lead: dict, niche_ok: bool, picky: set) -> str:
         return "prospect_new"
     if not wanted(lead):  # neither contract work nor a remote job (decision #31)
         return "not_contract"
-    if blocked(lead.get("title", "")):
+    if blocked(lead.get("title", ""), lead.get("company", "")):
         return "off_niche"
     if wrong_country(lead, COUNTRIES):
         return "wrong_country"

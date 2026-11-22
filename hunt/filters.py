@@ -1,7 +1,7 @@
 """Cheap keyword pre-filter: keeps the AI bill small by dropping obvious non-matches first."""
 import re
 
-from .config import JOB_EXCLUDE, MARKET_WORDS, ROLE_WORDS
+from .config import BIG_EMPLOYERS, JOB_EXCLUDE, MARKET_WORDS, ROLE_WORDS
 
 
 def _has(text: str, word: str) -> bool:
@@ -154,10 +154,11 @@ def wrong_country(lead: dict, allowed: set) -> bool:
     return bool(only) and not any(_allowed_place(c, allowed) for c in only)
 
 
-def blocked(title: str) -> bool:
-    """Title names work the owner never does (JOB_EXCLUDE). Applies even to trusted searches."""
-    title = (title or "").lower()
-    return any(_has(title, w.strip()) for w in JOB_EXCLUDE)
+def blocked(title: str, company: str = "") -> bool:
+    """Title names work the owner never does (JOB_EXCLUDE), or the employer is a big bank / asset manager
+    (BIG_EMPLOYERS). Applies even to trusted searches."""
+    title, company = (title or "").lower(), (company or "").lower()
+    return any(_has(title, w.strip()) for w in JOB_EXCLUDE) or any(_has(company, w) for w in BIG_EMPLOYERS)
 
 
 REMOTE = re.compile(r"\b(remote|work from home|wfh|anywhere|distributed)\b", re.I)

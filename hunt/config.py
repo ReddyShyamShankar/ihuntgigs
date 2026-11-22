@@ -76,4 +76,14 @@ JOB_EXCLUDE = ["rust", "smart contract", "solidity", "qa", "kyc", "aml", "compli
                # added 2026-11-21 from the Himalayas review (owner: "picks are right")
                "esports", "gaming", "teacher", "native speaker", "russian", "italian", "spanish", "german", "french",
                "portuguese", "sales development", "sdr", "country manager", "data warehouse", "hris",
-               "risk analyst", "interview", "fps", "cs2", "us based", "us-based"]
+               "risk analyst", "interview", "fps", "cs2", "us based", "us-based",
+               # added 2026-11-22 from the first LinkedIn night (owner: "filter out big-bank jobs")
+               "m&a", "mergers", "investment banking", "trade support", "production support", "healthcare",
+               "medtech", "credit research", "quantitative researcher", "quantitative research",
+               "investor relations", "risk assessment", "fix analyst", "business support analyst"]
+# Big banks / asset managers: corporate full-time hiring, never a fit for a freelancer. Company name match.
+BIG_EMPLOYERS = ["goldman sachs", "barclays", "bnp paribas", "lazard", "millennium", "jpmorgan", "j.p. morgan",
+                 "jp morgan", "morgan stanley", "citigroup", "citibank", "citi", "hsbc", "ubs", "deutsche bank",
+                 "credit suisse", "wells fargo", "bank of america", "alliancebernstein", "blackrock",
+                 "standard chartered", "nomura", "societe generale", "société générale", "natwest", "lloyds",
+                 "state street", "fidelity", "vanguard", "jefferies", "evercore", "rothschild", "macquarie"]

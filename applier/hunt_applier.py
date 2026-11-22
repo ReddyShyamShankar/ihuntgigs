@@ -181,9 +181,9 @@ def field_rules(p: dict, cover: str) -> list[tuple[re.Pattern, str]]:
         # (owner, 2026-11-21: "you give a number based on my profile"). See pay_answer().
         (R(r"salary|compensation|expected pay|pay expectation|remuneration|\bctc\b|hourly rate|rate per hour|"
            r"per hour|\brate\b"), lambda desc: pay_answer(p, desc)),
-        (R(r"notice period|start date|when can you start|availability"), p.get("availability", "")),
+        (R(r"notice period|start date|when (can|could|would) you start|earliest (start|date)|availability"), p.get("availability", "")),
         (R(r"how did you hear|referr"), p.get("heard_from", "")),
-        (R(r"cover letter|additional info|anything else|why (do you|are you)|tell us|motivation|message|introduc"), cover),
+        (R(r"cover letter|additional info|anything else|why (do you|are you|did you apply)|why (this role|us|join)|tell us|motivation|message|introduc"), cover),
         # last: a field whose label is just "Name" / "Full name" / "Your name" (not "Company name")
         (R(r"^\s*(your |full[\s_-]*|legal )?name\s*[*✱]?\s*(\||$)"), p["full_name"]),
     ]
@@ -214,17 +214,22 @@ def _describe(el) -> str:
 
 def pick_option(page, el, value: str) -> bool:
     """Pick-from-list box (Country, City): click the list option that starts like our answer.
+    Only the first part of the answer is typed ("Lisbon", not "Lisbon, Portugal (remote, GMT+0)"): search boxes
+    find nothing for the long version. Lists can load slowly, so it waits up to ~6 s.
     If no option matches, the typed text is cleared so the field shows up as NEEDS YOU, not half-filled."""
-    page.wait_for_timeout(1200)
-    want = value.lower().split(",")[0].strip()
-    for opt in page.query_selector_all("[role=option]"):
-        try:
-            if opt.is_visible() and (opt.inner_text() or "").strip().lower().startswith(want[:20]):
-                opt.click()
-                page.wait_for_timeout(400)
-                return True
-        except Exception:  # noqa: BLE001
-            pass
+    short = value.split(",")[0].split("(")[0].strip()
+    want = short.lower()
+    el.fill(short)
+    for _ in range(12):
+        page.wait_for_timeout(500)
+        for opt in page.query_selector_all("[role=option]"):
+            try:
+                if opt.is_visible() and (opt.inner_text() or "").strip().lower().startswith(want[:20]):
+                    opt.click()
+                    page.wait_for_timeout(400)
+                    return True
+            except Exception:  # noqa: BLE001
+                pass
     el.fill("")
     return False
 

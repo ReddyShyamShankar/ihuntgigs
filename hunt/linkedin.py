@@ -127,7 +127,7 @@ def collect(con=None, per_run: int | None = None, get=_get, pause: float = PAUSE
                 cards = parse_cards(get(search_url(keyword, place, page * 10, int(cfg.get("hours", 24)))))
                 time.sleep(pause)
                 for c in cards:
-                    if c["id"] in seen or not c["title"] or blocked(c["title"]):
+                    if c["id"] in seen or not c["title"] or blocked(c["title"], c["company"]):
                         continue
                     seen.add(c["id"])
                     probe = {"title": c["title"], "summary": f"Location: {c['location'] or 'Worldwide'}.", "extra": {}}
