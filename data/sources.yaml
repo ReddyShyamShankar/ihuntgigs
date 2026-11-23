@@ -87,7 +87,7 @@ linkedin_search:  # LinkedIn's PUBLIC job search (logged out, no account): hunt/
   enabled: true
   apply: auto      # company-site jobs → server robot; Easy Apply → owner by hand (never inside LinkedIn)
   hours: 24        # posted in the last 24 hours, remote only
-  per_run: 7       # keyword × place searches per hourly run → all 160 covered about once a day
+  per_run: 7       # keyword × place searches per hourly run → all 156 covered about once a day
   pages: 1         # 10 jobs per search
   keywords:        # owner's skills (Upwork history, LinkedIn, Notion, Upwork robot searches), approved 2026-11-21
     - crypto content writer
