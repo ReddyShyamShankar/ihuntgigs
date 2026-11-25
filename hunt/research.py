@@ -22,7 +22,7 @@ import time
 
 import yaml
 
-from . import brain, chatgpt, contacts
+from . import brain, chatgpt, config, contacts
 
 LANES = ("writing", "signals", "design", "product", "development", "coaching")
 PER_DAY = int(os.environ.get("HUNT_RESEARCH_PER_DAY", "30"))
@@ -187,6 +187,8 @@ def run(con, limit: int | None = None, ask=None, fetch=None) -> dict:
     from . import store
     limit = PER_RUN if limit is None else limit
     counts = {"researched": 0, "other_language": 0, "errors": 0, "paused": ""}
+    if ask is None and not config.ai_on():
+        return counts  # AI off: leads keep waiting, no noise
     rows = con.execute("SELECT * FROM leads WHERE status='prospect_ready' ORDER BY prescore DESC, created_at "
                        "LIMIT ?", (limit + 50,)).fetchall()  # extra rows: free language skips don't use budget
     start = used_today(con)

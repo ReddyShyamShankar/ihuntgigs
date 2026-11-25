@@ -14,12 +14,14 @@ queue → AI (score 0-100 + email + DM, max N/day) → Telegram card with button
 your taps (Sent / Skip / Replied / Won / Lost) → weekly per-source digest
 ```
 
-## AI: use your ChatGPT plan (or an Anthropic API key)
-- **Default — Sign in with ChatGPT.** Uses OpenAI's official
+## AI: off by default
+Hunt makes no AI calls until you set `HUNT_AI` in `.env`. With AI off it still finds jobs and sends job cards;
+nothing gets written or scored by AI.
+- **`HUNT_AI=chatgpt` — Sign in with ChatGPT.** Uses OpenAI's official
   [Sign in with ChatGPT](https://developers.openai.com/siwc) plan-usage flow for open-source,
   self-hosted apps. No API key. Usage counts against your ChatGPT plan; check it at
   chatgpt.com/settings/usage.
-- **Alternative — Claude.** Set `HUNT_AI=claude` and `ANTHROPIC_API_KEY` in `.env`.
+- **Claude.** Set `HUNT_AI=claude` and `ANTHROPIC_API_KEY` in `.env`.
 
 ## Setup
 1. `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`
@@ -27,7 +29,7 @@ your taps (Sent / Skip / Replied / Won / Lost) → weekly per-source digest
    The AI may cite only what is in this file.
 3. Edit `data/sources.yaml` for your niche.
 4. Create a Telegram bot with @BotFather; put its token in `.env` (see `.env.example`).
-5. `.venv/bin/python -m hunt login` — signs in with ChatGPT in your browser.
+5. Optional AI: set `HUNT_AI=chatgpt`, then `.venv/bin/python -m hunt login` — signs in with ChatGPT in your browser.
 6. Try it: `.venv/bin/python -m hunt collect` (free dry run), then `.venv/bin/python -m hunt run`.
 
 ## Run it on a server

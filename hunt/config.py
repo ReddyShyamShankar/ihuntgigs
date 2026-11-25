@@ -22,7 +22,17 @@ def _load_env() -> None:
 
 _load_env()
 
-AI = os.environ.get("HUNT_AI", "chatgpt").lower()  # "chatgpt" (ChatGPT plan) or "claude" (API key)
+# Master AI switch. "off" (default) = no AI of any kind. Only an explicit "chatgpt" (ChatGPT plan) or
+# "claude" (API key) turns it on; anything else, including a typo, counts as off.
+AI = os.environ.get("HUNT_AI", "off").strip().lower()
+if AI not in ("chatgpt", "claude"):
+    AI = "off"
+
+
+def ai_on() -> bool:
+    return AI != "off"
+
+
 CHATGPT_MODEL = os.environ.get("HUNT_CHATGPT_MODEL", "")  # empty = first model your account lists
 CHATGPT_EFFORT = os.environ.get("HUNT_CHATGPT_EFFORT", "")  # optional reasoning effort, e.g. "medium"
 MODEL = os.environ.get("HUNT_MODEL", "claude-opus-5-5")

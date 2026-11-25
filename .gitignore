@@ -22,7 +22,7 @@ venv/
 
 # Hunt runtime data
 data/hunt.db
-data/chatgpt.json
+data/chatgpt.json*
 data/host_id
 data/*.lock
 data/.tmp-*

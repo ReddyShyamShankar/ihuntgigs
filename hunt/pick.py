@@ -9,7 +9,7 @@ and taps "✅ I applied". Since 2026-11-20 every contract job source uses this f
 import json
 import time
 
-from . import autoapply, brain, chatgpt, policy, store, telegram
+from . import autoapply, brain, chatgpt, config, policy, store, telegram
 from .config import BID_RESERVE, MAX_AI_PER_DAY, TELEGRAM_CHAT_ID
 
 MAX_CARDS_PER_CYCLE = 15
@@ -35,7 +35,11 @@ def owns(row, action: str = "") -> bool:
 
 
 def _ai_left(con) -> int:
-    return store.bid_ai_left(con, MAX_AI_PER_DAY, BID_RESERVE)
+    return store.bid_ai_left(con, MAX_AI_PER_DAY, BID_RESERVE) if config.ai_on() else 0
+
+
+def _no_ai_note() -> str:
+    return "today's bid AI allowance is used up" if config.ai_on() else "AI is switched off"
 
 
 def _data(row) -> dict:
@@ -138,7 +142,7 @@ def process_writes(con) -> int:
     for row in store.with_status(con, "to_write"):
         auto = autoapply.is_auto(row)
         if auto and not _ai_left(con):
-            continue  # automatic jobs wait for tomorrow's AI allowance instead of failing
+            continue  # automatic jobs wait (AI off, or today's allowance used) instead of failing
         saved = _data(row)
         where = row["tg_draft_id"] or row["tg_card_id"]
         name = "" if where else f" ({row['title'][:80]})"  # automatic jobs have no card to reply to
@@ -162,7 +166,7 @@ def process_writes(con) -> int:
             autoapply.queue(con, row, d) if auto else _post_bid(con, row, d)
         else:
             why = "; ".join((attempt or {}).get("policy", {}).get("blockers", [])[:6]) or \
-                  ("today's bid AI allowance is used up" if not _ai_left(con) else "the AI gave no answer")
+                  (_no_ai_note() if not _ai_left(con) else "the AI gave no answer")
             if d.get("bid"):  # a rewrite failed: keep the last good bid, like the Upwork bot
                 telegram.say(f"⚠️ The rewrite didn't pass the checker ({why}). Your previous text is unchanged.",
                              reply_to_message_id=where)
@@ -200,7 +204,8 @@ def tap(con, action: str, lead_id: str, message_id=None) -> str:
         return "Not possible right now"
     elif action in ("write", "redo"):
         if not _ai_left(con):
-            return "Today's bid AI allowance is used up — try tomorrow"
+            note = _no_ai_note()
+            return note[0].upper() + note[1:] + (" — try tomorrow" if config.ai_on() else "")
         d = _data(row)
         if action == "redo":
             d["fresh"] = True  # write new text, but keep the old bid in case every new attempt fails
@@ -243,7 +248,8 @@ def reply(con, row, text: str) -> None:
         rebutton(con, row["id"])
         return
     if not _ai_left(con):
-        telegram.say("⏸ Today's bid AI allowance is used up; try the rewrite tomorrow.")
+        telegram.say("⏸ Today's bid AI allowance is used up; try the rewrite tomorrow." if config.ai_on() else
+                     "⏸ AI is switched off. Reply TEXT: + your own words to use your own text.")
         return
     d["instruction"] = text
     store.update(con, row["id"], status="to_write", data=d)

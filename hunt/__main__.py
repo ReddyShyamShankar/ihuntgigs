@@ -18,7 +18,7 @@ import threading
 import time
 import traceback
 
-from . import (brain, chatgpt, contacts, followups, gmail_alerts, linkedin, outreach, pick, pitch, registry, research,
+from . import (brain, chatgpt, config, contacts, followups, gmail_alerts, linkedin, outreach, pick, pitch, registry, research,
                sender, store, telegram, youtube)
 from .config import COUNTRIES, BID_RESERVE, MAX_AI_PER_DAY, MAX_AI_PER_RUN, MIN_SCORE, RUN_EVERY_MINUTES, TELEGRAM_CHAT_ID
 from .filters import blocked, is_contract, keep, prescore, wanted, wrong_country
@@ -146,7 +146,7 @@ def run_cycle() -> str:
                                         f"{mailed['off']}. Send them by hand or finish the inbox setup.")
         todo = store.queued(con, exclude_sources=pick_sources())  # best first; nothing dropped
         sent = low = 0
-        budget = min(MAX_AI_PER_RUN, store.lead_ai_left(con, MAX_AI_PER_DAY, BID_RESERVE))
+        budget = min(MAX_AI_PER_RUN, store.lead_ai_left(con, MAX_AI_PER_DAY, BID_RESERVE)) if config.ai_on() else 0
         paused = ""
         for lead in todo[:budget]:
             if not store.lead_ai_left(con, MAX_AI_PER_DAY, BID_RESERVE):
@@ -353,6 +353,9 @@ def handle_update(con, u) -> None:
             pick.reply(con, row, text)
             return
         lead, d = dict(row), json.loads(row["data"] or "{}")
+        if not config.ai_on():
+            telegram.say("⏸ AI is switched off; no rewrite.")
+            return
         if not store.bid_ai_left(con, MAX_AI_PER_DAY, BID_RESERVE):
             telegram.say(f"⏸ Daily AI limit ({MAX_AI_PER_DAY}) reached; try the rewrite tomorrow.")
             return

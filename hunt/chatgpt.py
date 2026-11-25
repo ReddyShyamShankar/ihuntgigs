@@ -24,6 +24,7 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
+from . import config
 from .config import DATA
 
 AUTH = "https://auth.openai.com"
@@ -53,6 +54,10 @@ class UsageLimit(RuntimeError):
 
 class TryLater(RuntimeError):
     """Temporary or policy problem on OpenAI's side. Pause the cycle; keep leads queued and credentials."""
+
+
+class AIOff(TryLater):
+    """The owner's master switch (HUNT_AI) does not allow this AI. Nothing is sent; leads stay queued."""
 
 
 class ChatGPTError(RuntimeError):
@@ -128,6 +133,7 @@ def _validate_id_token(id_token: str, client_id: str, nonce: str | None) -> dict
 # ---------- sign-in (run on your own computer) ----------
 
 def login() -> None:
+    _require_on()
     saved = json.loads(CREDS.read_text()) if CREDS.exists() else {}
     client_id = saved.get("client_id")
     state, nonce = secrets.token_urlsafe(24), secrets.token_urlsafe(24)
@@ -240,8 +246,14 @@ def _save_login(claims: dict, issued: str, tok: dict, scopes: list) -> None:
 
 # ---------- tokens (server keeps them fresh) ----------
 
+def _require_on() -> None:
+    if config.AI != "chatgpt":
+        raise AIOff("AI is switched off (HUNT_AI)")
+
+
 def access_token() -> str:
     """Return a valid access token, refreshing it near expiry. Serialised across threads/processes."""
+    _require_on()  # models() and respond() both need a token, so nothing is sent while AI is off
     LOCK.parent.mkdir(parents=True, exist_ok=True)
     with open(LOCK, "w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)

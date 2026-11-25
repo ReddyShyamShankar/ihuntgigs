@@ -19,7 +19,7 @@ import os
 import re
 import time
 
-from . import brain, chatgpt, policy, settings
+from . import brain, chatgpt, config, policy, settings
 
 PER_DAY = int(os.environ.get("HUNT_PITCH_PER_DAY", "30"))
 PER_RUN = int(os.environ.get("HUNT_PITCH_PER_RUN", "6"))
@@ -266,6 +266,8 @@ def run(con, limit: int | None = None, ask=None) -> dict:
     from . import store
     limit = PER_RUN if limit is None else limit
     counts = {"drafted": 0, "flagged": 0, "errors": 0, "paused": ""}
+    if ask is None and not config.ai_on():
+        return counts  # AI off: leads keep waiting, no noise
     active = set(settings.get(con, "active_lanes", settings.LANES))
     rows = [r for r in con.execute("SELECT * FROM leads WHERE status='researched' ORDER BY score DESC, created_at")
             # a lead only for switched-off lanes waits (stays `researched`) until its lane is switched on again
@@ -296,6 +298,8 @@ def revise(con, lead_id: str, comment: str, ask=None) -> dict:
     """The owner's comment on the current draft → a new version (and, if learning is on, a style rule).
     Returns the new draft dict. Owner's requests are not limited by the daily pitch budget."""
     from . import store
+    if ask is None and not config.ai_on():
+        raise chatgpt.AIOff("AI is switched off (HUNT_AI)")
     row = store.get(con, lead_id)
     data = json.loads(row["data"] or "{}")
     cur = data.get("draft") or {}

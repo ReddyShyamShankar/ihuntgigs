@@ -41,8 +41,8 @@ $SSH "$HOST" 'set -e
   if [ -f data/private/profile.yaml ]; then systemctl enable --now hunt-robot.timer >/dev/null 2>&1; echo "robot timer: $(systemctl is-active hunt-robot.timer)"
   else echo "Robot off: no data/private/profile.yaml yet (jobs go to the Mac helper)."; fi
   systemctl restart hunt-dash && sleep 2 && echo "dashboard: $(systemctl is-active hunt-dash)"
-  if grep -q "^TELEGRAM_BOT_TOKEN=." .env && { [ -f data/chatgpt.json ] || grep -q "^ANTHROPIC_API_KEY=." .env; }; then
+  if grep -q "^TELEGRAM_BOT_TOKEN=." .env; then   # AI may be off (HUNT_AI); Hunt still finds jobs
     systemctl restart hunt && sleep 5 && systemctl --no-pager --lines=5 status hunt
   else
-    echo "Installed. Waiting for Telegram token + AI sign-in (push-login.sh) before starting."
+    echo "Installed. Waiting for Telegram token before starting."
   fi'

@@ -1,6 +1,6 @@
 """The AI part: scores each lead against the owner's niche and writes the pitch, citing only the portfolio library.
 
-Backend is chosen by HUNT_AI: "chatgpt" (default, uses the owner's ChatGPT plan via Sign in with ChatGPT)
+Backend is chosen by HUNT_AI: "off" (default, no AI call is ever made), "chatgpt" (uses the owner's ChatGPT plan via Sign in with ChatGPT)
 or "claude" (uses an Anthropic API key).
 """
 import json
@@ -8,8 +8,8 @@ import re
 
 import yaml
 
-from . import chatgpt
-from .config import AI, CHATGPT_EFFORT, CHATGPT_MODEL, DATA, EFFORT, MODEL
+from . import chatgpt, config
+from .config import CHATGPT_EFFORT, CHATGPT_MODEL, DATA, EFFORT, MODEL
 
 PORTFOLIO = (DATA / "portfolio.yaml").read_text()
 OWNER = yaml.safe_load(PORTFOLIO).get("owner") or {}
@@ -97,7 +97,9 @@ _model = CHATGPT_MODEL
 
 def _ask(user_text: str, schema: dict, system: str | None = None) -> dict | None:
     system = system or SYSTEM
-    if AI == "chatgpt":
+    if not config.ai_on():
+        raise chatgpt.AIOff("AI is switched off (HUNT_AI)")
+    if config.AI == "chatgpt":
         global _model
         if not _model:  # first model the account lists, unless HUNT_CHATGPT_MODEL picks one
             _model = chatgpt.models()[0]["slug"]
@@ -106,6 +108,8 @@ def _ask(user_text: str, schema: dict, system: str | None = None) -> dict | None
 
 
 def _ask_claude(user_text: str, schema: dict, system: str | None = None) -> dict | None:
+    if config.AI != "claude":
+        raise chatgpt.AIOff("AI is switched off (HUNT_AI)")
     import anthropic
 
     global _client

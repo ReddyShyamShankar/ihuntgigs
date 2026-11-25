@@ -19,7 +19,7 @@ import json
 import os
 import time
 
-from . import chatgpt, pitch, settings, store
+from . import chatgpt, config, pitch, settings, store
 
 ON = os.environ.get("HUNT_FOLLOWUPS", "off").lower() == "on"
 DAYS = [int(x) for x in os.environ.get("HUNT_FOLLOWUP_DAYS", "3,7").split(",") if x.strip()]
@@ -72,7 +72,7 @@ def due(con, now: float | None = None) -> list:
 
 def run(con, ask=None, now: float | None = None) -> dict:
     counts = {"drafted": 0, "errors": 0, "paused": ""}
-    if not on(con):
+    if not on(con) or (ask is None and not config.ai_on()):
         return counts
     for row, n, due_at in due(con, now)[:PER_RUN]:
         if pitch.used_today(con) >= pitch.PER_DAY:
